@@ -50,22 +50,6 @@ FESTIVOS_BARCELONA_2025 = {
     (2025, 12, 26): "San Esteban",
 }
 
-# === LUGARES POPULARES DE BARCELONA ===
-POPULAR_PLACES = {
-    "🏛️ Sagrada Familia": (41.4036, 2.1744),
-    "🌳 Park Güell": (41.4145, 2.1527),
-    "⚽ Camp Nou": (41.3809, 2.1228),
-    "🏥 Hospital Clínic": (41.3889, 2.1505),
-    "📍 Plaça Catalunya": (41.3870, 2.1701),
-    "✈️ Aeropuerto T1": (41.2974, 2.0833),
-    "🚂 Estación Sants": (41.3792, 2.1402),
-    "⛵ Port Olímpic": (41.3874, 2.1963),
-    "🏥 Hospital Sant Pau": (41.4144, 2.1774),
-    "🎓 Universidad BCN": (41.3866, 2.1639),
-    "🏖️ Barceloneta": (41.3805, 2.1893),
-    "🛍️ La Rambla": (41.3810, 2.1730)
-}
-
 def is_festivo(date_obj):
     year, month, day = date_obj.year, date_obj.month, date_obj.day
     if year == 2025:
@@ -85,29 +69,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
-# Estilos CSS personalizados
-st.markdown("""
-<style>
-    .route-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 20px;
-        border-radius: 15px;
-        color: white;
-        margin: 10px 0;
-    }
-    .safety-badge {
-        display: inline-block;
-        padding: 5px 15px;
-        border-radius: 20px;
-        font-weight: bold;
-        margin: 5px;
-    }
-    .high-risk { background-color: #e74c3c; }
-    .medium-risk { background-color: #f39c12; }
-    .low-risk { background-color: #27ae60; }
-</style>
-""", unsafe_allow_html=True)
 
 # -----------------------------
 #   Carga de modelo
@@ -210,22 +171,6 @@ def get_risk_color(probability):
     else:
         return '#27ae60'
 
-def get_gradient_color(risk_value):
-    """Obtener color gradiente según el riesgo (verde->amarillo->rojo)"""
-    if risk_value <= 0.05:
-        # Verde a amarillo
-        ratio = risk_value / 0.05
-        r = int(39 + (243 - 39) * ratio)
-        g = int(174 + (156 - 174) * ratio)
-        b = int(96 + (18 - 96) * ratio)
-    else:
-        # Amarillo a rojo
-        ratio = min(1.0, (risk_value - 0.05) / 0.05)
-        r = int(243 + (231 - 243) * ratio)
-        g = int(156 + (76 - 156) * ratio)
-        b = int(18 + (60 - 18) * ratio)
-    return f'#{r:02x}{g:02x}{b:02x}'
-
 # -----------------------------
 #   Geodésicos
 # -----------------------------
@@ -281,34 +226,16 @@ DEFAULT_SPEEDS = {
     "residential": 30, "service": 20, "living_street": 10
 }
 
-VEHICLE_SPEED_FACTORS = {
-    "🚗 Coche": 1.0,
-    "🏍️ Moto": 1.1,  # Motos pueden ir un poco más rápido en tráfico
-    "🚲 Bicicleta": 0.3,  # Mucho más lento
-    "🚚 Camión": 0.85,  # Más lento que coches
-}
-
-VEHICLE_RISK_FACTORS = {
-    "🚗 Coche": 1.0,
-    "🏍️ Moto": 1.3,  # Mayor riesgo para motos
-    "🚲 Bicicleta": 1.5,  # Mucho más vulnerable
-    "🚚 Camión": 0.9,  # Ligeramente más seguro
-}
-
-def infer_speed_kmh(edge_data, vehicle_type="🚗 Coche"):
+def infer_speed_kmh(edge_data):
     mx = parse_maxspeed(edge_data.get("maxspeed"))
     if mx is not None and mx > 0:
-        base_speed = float(mx)
+        return float(mx)
+    hw = edge_data.get("highway")
+    if isinstance(hw, list):
+        candidates = [DEFAULT_SPEEDS.get(h, 30) for h in hw]
+        return float(max(candidates) if candidates else 30.0)
     else:
-        hw = edge_data.get("highway")
-        if isinstance(hw, list):
-            candidates = [DEFAULT_SPEEDS.get(h, 30) for h in hw]
-            base_speed = float(max(candidates) if candidates else 30.0)
-        else:
-            base_speed = float(DEFAULT_SPEEDS.get(hw, 30.0))
-    
-    # Ajustar por tipo de vehículo
-    return base_speed * VEHICLE_SPEED_FACTORS.get(vehicle_type, 1.0)
+        return float(DEFAULT_SPEEDS.get(hw, 30.0))
 
 def nearest_osm_node(G, lat, lon):
     try:
@@ -367,19 +294,14 @@ def build_axis_subgraph(G):
     return G_axis
 
 # ====== Riesgo → pesos de ruta (MEJORADO) ======
-def risk_factor_from_prob(prob, vehicle_type="🚗 Coche"):
+def risk_factor_from_prob(prob):
     """Penalización: más fuerte para notar el cambio con el slider."""
-    base_factor = 1.0
     if prob >= 0.10:   # alto
-        base_factor = 7.0
+        return 7.0
     elif prob >= 0.05: # medio
-        base_factor = 3.5
+        return 3.5
     else:
-        base_factor = 1.0
-    
-    # Ajustar por tipo de vehículo
-    vehicle_factor = VEHICLE_RISK_FACTORS.get(vehicle_type, 1.0)
-    return base_factor * vehicle_factor
+        return 1.0
 
 def build_cluster_kdtree(cluster_geometries, predictions_data):
     """Prepara KD-Tree (si SciPy disponible) con lat/lon y probs de clusters."""
@@ -398,7 +320,7 @@ def build_cluster_kdtree(cluster_geometries, predictions_data):
         tree = None
     return tree, pts, np.array(probs)
 
-def precompute_edge_costs(G, predictions_data, cluster_geometries, buffer_m=200.0, objective="balanced", vehicle_type="🚗 Coche"):
+def precompute_edge_costs(G, predictions_data, cluster_geometries, buffer_m=200.0, objective="balanced"):
     """
     Para cada arista:
       - tiempo base por longitud/velocidad.
@@ -418,7 +340,7 @@ def precompute_edge_costs(G, predictions_data, cluster_geometries, buffer_m=200.
     for u, v, k, data in G.edges(keys=True, data=True):
         length_m = float(data.get('length', 0.0))
         length_km = max(1e-4, length_m / 1000.0)
-        speed_kmh = max(5.0, infer_speed_kmh(data, vehicle_type))
+        speed_kmh = max(5.0, infer_speed_kmh(data))
         time_min = (length_km / speed_kmh) * 60.0
 
         yu, xu = G.nodes[u].get('y'), G.nodes[u].get('x')
@@ -440,7 +362,7 @@ def precompute_edge_costs(G, predictions_data, cluster_geometries, buffer_m=200.
                 if d_km * 1000.0 <= buffer_m:
                     risk_prob = max(risk_prob, predictions_data[cid]['probability'])
 
-        rf = risk_factor_from_prob(risk_prob, vehicle_type)
+        rf = risk_factor_from_prob(risk_prob)
         if rf > 1.0:
             penalized += 1
 
@@ -470,8 +392,6 @@ def route_between_nodes(G, src, dst):
     coords = [(G.nodes[n]['y'], G.nodes[n]['x']) for n in path]
     total_km = 0.0
     total_time_min = 0.0
-    risks = []
-    
     for i in range(len(path)-1):
         u, v = path[i], path[i+1]
         best = None
@@ -484,184 +404,65 @@ def route_between_nodes(G, src, dst):
         if best is not None:
             total_km += best.get('length_km', 0.0)
             total_time_min += best.get('time_min', 0.0)
-            risks.append(best.get('risk_prob', 0.0))
-    
-    return {
-        "path": path, 
-        "coords": coords, 
-        "km": total_km, 
-        "min": total_time_min,
-        "risks": risks,
-        "avg_risk": np.mean(risks) if risks else 0.0
-    }
+    return {"path": path, "coords": coords, "km": total_km, "min": total_time_min}
 
-def calculate_alternative_routes(G_full, predictions_data, cluster_geometries,
-                                origin, destination, vehicle_type="🚗 Coche"):
-    """Calcular 3 rutas alternativas con diferentes prioridades"""
+def compute_route_eje_vial(G_full, predictions_data, cluster_geometries,
+                           origin, destination, buffer_m=200, objective="balanced"):
     if G_full is None:
         return None, "No hay red vial cargada."
-    
-    routes = {}
-    objectives = [
-        ("🛡️ Más Segura", "safest"),
-        ("⚡ Más Rápida", "fastest"),
-        ("⚖️ Equilibrada", "balanced")
-    ]
-    
-    for name, obj in objectives:
-        # Recalcular pesos para cada objetivo
-        _ = precompute_edge_costs(G_full, predictions_data, cluster_geometries, 
-                                 buffer_m=200, objective=obj, vehicle_type=vehicle_type)
-        
-        o_node = nearest_node_on_graph(G_full, origin[0], origin[1])
-        d_node = nearest_node_on_graph(G_full, destination[0], destination[1])
-        
-        if o_node and d_node:
-            route = route_between_nodes(G_full, o_node, d_node)
-            if route:
-                routes[name] = route
-    
-    return routes, None
 
-def get_route_safety_score(route_data):
-    """Calcular puntuación de seguridad de una ruta (0-100)"""
-    avg_risk = route_data.get('avg_risk', 0.0)
-    safety_score = max(0, 100 - (avg_risk * 1000))
-    return safety_score
+    G_axis = build_axis_subgraph(G_full)
+    if G_axis is None or len(G_axis.edges) == 0:
+        return None, "No se pudo construir subgrafo del eje vial."
 
-def get_safety_badge(risk_level):
-    """Obtener badge de seguridad con estrellas"""
-    if risk_level < 0.03:
-        return "⭐⭐⭐⭐⭐ Excelente"
-    elif risk_level < 0.05:
-        return "⭐⭐⭐⭐ Muy Segura"
-    elif risk_level < 0.08:
-        return "⭐⭐⭐ Segura"
-    elif risk_level < 0.10:
-        return "⭐⭐ Precaución"
-    else:
-        return "⭐ Alto Riesgo"
+    # Recalcular SIEMPRE pesos (para que el slider afecte)
+    penalized_full = precompute_edge_costs(G_full, predictions_data, cluster_geometries, buffer_m=buffer_m, objective=objective)
+    penalized_axis = precompute_edge_costs(G_axis, predictions_data, cluster_geometries, buffer_m=buffer_m, objective=objective)
 
-def analyze_route_warnings(route_data, predictions_data, cluster_geometries):
-    """Analizar la ruta y generar advertencias específicas"""
-    warnings = []
-    high_risk_zones = []
-    
-    # Analizar cada segmento de la ruta
-    coords = route_data.get('coords', [])
-    for i, coord in enumerate(coords[::5]):  # Samplear cada 5 puntos
-        # Buscar clusters cercanos
-        for cluster_id, geo in cluster_geometries.items():
-            if cluster_id not in predictions_data:
-                continue
-            
-            dist_km = haversine(coord[0], coord[1], geo['lat'], geo['lon'])
-            if dist_km < 0.5:  # Dentro de 500m
-                risk = predictions_data[cluster_id]['probability']
-                if risk >= 0.10:
-                    high_risk_zones.append({
-                        'cluster': cluster_id,
-                        'risk': risk,
-                        'position': i * 5 / len(coords) * 100  # % del recorrido
-                    })
-    
-    # Generar advertencias
-    if high_risk_zones:
-        zones_by_position = sorted(high_risk_zones, key=lambda x: x['position'])
-        for zone in zones_by_position[:3]:  # Máximo 3 advertencias
-            if zone['position'] < 33:
-                position_text = "al inicio del recorrido"
-            elif zone['position'] < 66:
-                position_text = "a mitad del recorrido"
-            else:
-                position_text = "cerca del destino"
-            
-            warnings.append({
-                'type': 'high' if zone['risk'] >= 0.10 else 'medium',
-                'message': f"Zona {zone['cluster']} con riesgo {zone['risk']*100:.1f}% {position_text}",
-                'suggestion': "Conduce con precaución extra en esta zona"
-            })
-    
-    return warnings
+    # Snapping a nodos
+    o_node = nearest_node_on_graph(G_full, origin[0], origin[1])
+    d_node = nearest_node_on_graph(G_full, destination[0], destination[1])
+    s_axis = nearest_node_on_graph(G_axis, origin[0], origin[1])
+    t_axis = nearest_node_on_graph(G_axis, destination[0], destination[1])
+
+    if o_node is None or d_node is None or s_axis is None or t_axis is None:
+        return None, "No se pudieron localizar nodos cercanos."
+
+    access = route_between_nodes(G_full, o_node, s_axis)
+    core   = route_between_nodes(G_axis, s_axis, t_axis)
+    egress = route_between_nodes(G_full, t_axis, d_node)
+
+    if (access is None) or (core is None) or (egress is None):
+        fallback = route_between_nodes(G_full, o_node, d_node)
+        if fallback is None:
+            return None, "No se encontró ruta entre origen y destino."
+        return {
+            "coords": fallback["coords"],
+            "distance_km": fallback["km"],
+            "eta_min": fallback["min"],
+            "used_axis": False,
+            "penalized_edges": penalized_full
+        }, "Ruta completa fuera de eje (fallback)."
+
+    def stitch(a, b): return a[:-1] + b
+    coords = stitch(access["coords"], core["coords"])
+    coords = stitch(coords, egress["coords"])
+
+    total_km = access["km"] + core["km"] + egress["km"]
+    total_min = access["min"] + core["min"] + egress["min"]
+
+    return {
+        "coords": coords,
+        "distance_km": total_km,
+        "eta_min": total_min,
+        "used_axis": True,
+        "penalized_edges": penalized_full + penalized_axis
+    }, None
 
 # -----------------------------
-#   Mapas mejorados
+#   Mapas
 # -----------------------------
-def create_enhanced_route_map(predictions_data, cluster_geometries, route_data=None, 
-                            origin=None, destination=None, show_gradient=True):
-    """Mapa mejorado con gradiente de colores según riesgo"""
-    center_lat, center_lon = 41.3851, 2.1734
-    m = folium.Map(location=[center_lat, center_lon], zoom_start=12, tiles='CartoDB positron')
-    
-    # Añadir zonas de riesgo con transparencia
-    for cluster_id, prediction_data in predictions_data.items():
-        if cluster_id in cluster_geometries:
-            coords = cluster_geometries[cluster_id]
-            probability = prediction_data['probability']
-            risk_level = prediction_data['risk_level']
-            color = get_risk_color(probability)
-            radius_meters = max(50, min(300, probability * 2000))
-            
-            folium.Circle(
-                location=[coords['lat'], coords['lon']],
-                radius=radius_meters,
-                popup=folium.Popup(f"""
-                    <div style='width: 200px'>
-                    <b>🚦 Zona {cluster_id}</b><br>
-                    <b>Probabilidad:</b> {probability*100:.2f}%<br>
-                    <b>Nivel:</b> <span style='color: {color}'>{risk_level}</span><br>
-                    <b>Estado:</b> {'⚠️ Accidente probable' if prediction_data['prediction'] else '✅ Sin accidente'}
-                    </div>
-                """, max_width=250),
-                color=color, fillColor=color, fillOpacity=0.4, weight=2
-            ).add_to(m)
-    
-    # Marcadores de origen y destino mejorados
-    if origin:
-        folium.Marker(
-            location=[origin[0], origin[1]], 
-            icon=folium.Icon(color='green', icon='play', prefix='fa'),
-            popup="🚀 Origen"
-        ).add_to(m)
-    
-    if destination:
-        folium.Marker(
-            location=[destination[0], destination[1]], 
-            icon=folium.Icon(color='red', icon='flag-checkered', prefix='fa'),
-            popup="🎯 Destino"
-        ).add_to(m)
-    
-    # Dibujar ruta con gradiente si está disponible
-    if route_data and 'coords' in route_data:
-        coords = route_data['coords']
-        risks = route_data.get('risks', [])
-        
-        if show_gradient and risks:
-            # Dibujar la ruta por segmentos con colores según riesgo
-            for i in range(len(coords)-1):
-                segment = [coords[i], coords[i+1]]
-                risk = risks[i] if i < len(risks) else 0.0
-                color = get_gradient_color(risk)
-                
-                folium.PolyLine(
-                    segment,
-                    color=color,
-                    weight=8,
-                    opacity=0.8
-                ).add_to(m)
-        else:
-            # Ruta simple sin gradiente
-            folium.PolyLine(
-                coords, 
-                weight=6, 
-                opacity=0.9, 
-                color='#2c3e50'
-            ).add_to(m)
-    
-    return m
-
 def create_barcelona_map(predictions_data, cluster_geometries, route_coords=None, origin=None, destination=None):
-    """Mapa básico (compatibilidad hacia atrás)"""
     center_lat, center_lon = 41.3851, 2.1734
     m = folium.Map(location=[center_lat, center_lon], zoom_start=12, tiles='OpenStreetMap')
 
@@ -1038,234 +839,97 @@ def main():
                 st.write(f"{risk_emoji} **{i}.** Zona {area_id}: {data_['probability']*100:.2f}%")
 
     # ---------------------------
-    # RECOMENDADOR DE RUTA MEJORADO
+    # Recomendador de Ruta por EJE VIAL (MEJORADO)
     # ---------------------------
-    st.header("🚦 Planificador de Ruta Segura")
-    st.markdown("Calcula la mejor ruta evitando zonas de alto riesgo de accidentes")
-    
-    # Inicializar estado
+    st.subheader("🚦 Recomendador de Ruta en coche (eje vial, evitando riesgo)")
+    st.caption("Haz clic en el mapa superior para seleccionar **origen** y **destino**. Primero el origen, luego el destino.")
+
+    G, g_msg = load_or_build_graph()
+    if g_msg:
+        st.warning(g_msg)
+
     if 'route_origin' not in st.session_state:
         st.session_state.route_origin = None
     if 'route_destination' not in st.session_state:
         st.session_state.route_destination = None
-    if 'route_alternatives' not in st.session_state:
-        st.session_state.route_alternatives = None
-    if 'selected_route' not in st.session_state:
-        st.session_state.selected_route = None
-    
-    # Lugares populares
-    st.subheader("📍 Selección de Origen y Destino")
-    
-    col_places = st.columns(2)
-    with col_places[0]:
-        st.write("**🟢 Seleccionar Origen:**")
-        place_cols = st.columns(3)
-        for idx, (place, coords) in enumerate(list(POPULAR_PLACES.items())[:6]):
-            col = place_cols[idx % 3]
-            with col:
-                if st.button(place, key=f"orig_{idx}", use_container_width=True):
-                    st.session_state.route_origin = coords
-                    st.success(f"✅ Origen: {place}")
-                    st.session_state.route_alternatives = None
-    
-    with col_places[1]:
-        st.write("**🔴 Seleccionar Destino:**")
-        place_cols = st.columns(3)
-        for idx, (place, coords) in enumerate(list(POPULAR_PLACES.items())[6:12]):
-            col = place_cols[idx % 3]
-            with col:
-                if st.button(place, key=f"dest_{idx}", use_container_width=True):
-                    st.session_state.route_destination = coords
-                    st.success(f"✅ Destino: {place}")
-                    st.session_state.route_alternatives = None
-    
-    # O usar el mapa
-    st.info("💡 **Tip:** También puedes hacer clic en el mapa de arriba para seleccionar puntos personalizados")
-    
-    # Detectar clics en el mapa
+    if 'route_result' not in st.session_state:
+        st.session_state.route_result = None
+
     last_click = None
     if 'map_data' in locals() and isinstance(map_data, dict) and 'last_clicked' in map_data and map_data['last_clicked'] is not None:
         last_click = (map_data['last_clicked']['lat'], map_data['last_clicked']['lng'])
-    
-    if last_click:
-        col_map_select = st.columns(3)
-        with col_map_select[0]:
-            st.write(f"**Punto seleccionado:** {last_click[0]:.4f}, {last_click[1]:.4f}")
-        with col_map_select[1]:
-            if st.button("Usar como Origen", key="map_orig"):
+
+    col_set, col_actions = st.columns([2, 1])
+    with col_set:
+        st.write("**Punto seleccionado:**", f"{last_click[0]:.5f}, {last_click[1]:.5f}" if last_click else "—")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            if st.button("Fijar como Origen", disabled=last_click is None):
                 st.session_state.route_origin = last_click
-                st.session_state.route_alternatives = None
-        with col_map_select[2]:
-            if st.button("Usar como Destino", key="map_dest"):
+                st.session_state.route_result = None
+        with c2:
+            if st.button("Fijar como Destino", disabled=last_click is None):
                 st.session_state.route_destination = last_click
-                st.session_state.route_alternatives = None
-    
-    # Mostrar selección actual
-    st.markdown("---")
-    col_current = st.columns(2)
-    with col_current[0]:
-        if st.session_state.route_origin:
-            st.success(f"**🟢 Origen:** {st.session_state.route_origin[0]:.4f}, {st.session_state.route_origin[1]:.4f}")
-        else:
-            st.warning("**🟢 Origen:** No seleccionado")
-    
-    with col_current[1]:
-        if st.session_state.route_destination:
-            st.success(f"**🔴 Destino:** {st.session_state.route_destination[0]:.4f}, {st.session_state.route_destination[1]:.4f}")
-        else:
-            st.warning("**🔴 Destino:** No seleccionado")
-    
-    # Configuración de ruta
-    st.subheader("⚙️ Configuración de Ruta")
-    col_config = st.columns(3)
-    
-    with col_config[0]:
-        vehicle_type = st.selectbox(
-            "Tipo de vehículo",
-            options=list(VEHICLE_SPEED_FACTORS.keys()),
-            index=0,
-            help="El tipo de vehículo afecta la velocidad y el riesgo"
+                st.session_state.route_result = None
+        with c3:
+            if st.button("Limpiar"):
+                st.session_state.route_origin = None
+                st.session_state.route_destination = None
+                st.session_state.route_result = None
+
+    with col_actions:
+        st.markdown("**Actual:**")
+        st.write("Origen:", f"{st.session_state.route_origin[0]:.5f}, {st.session_state.route_origin[1]:.5f}" if st.session_state.route_origin else "—")
+        st.write("Destino:", f"{st.session_state.route_destination[0]:.5f}, {st.session_state.route_destination[1]:.5f}" if st.session_state.route_destination else "—")
+
+        objective = st.selectbox(
+            "Objetivo de ruta",
+            options=["Equilibrado (recomendado)", "Más seguro", "Más rápido"],
+            index=0
         )
-    
-    with col_config[1]:
-        departure_time = st.time_input(
-            "Hora de salida",
-            value=datetime.now().time(),
-            help="La hora afecta el nivel de riesgo"
+        objective_key = {"Equilibrado (recomendado)":"balanced", "Más seguro":"safest", "Más rápido":"fastest"}[objective]
+
+        buffer_m = st.slider(
+            "Radio de influencia del riesgo (m)",
+            50, 500, 200, 50,
+            help="Tramos de carretera dentro de este radio desde una zona heredan su nivel de riesgo para penalizar la ruta."
         )
-    
-    with col_config[2]:
-        if st.button("🗑️ Limpiar Selección"):
-            st.session_state.route_origin = None
-            st.session_state.route_destination = None
-            st.session_state.route_alternatives = None
-            st.session_state.selected_route = None
-            st.rerun()
-    
-    # Cargar grafo solo cuando sea necesario
-    can_route = (st.session_state.route_origin is not None) and (st.session_state.route_destination is not None)
-    
-    if can_route:
-        # Botón para calcular rutas
-        if st.button("🔍 Buscar Rutas Alternativas", type="primary", use_container_width=True):
-            with st.spinner("🗺️ Cargando red vial de Barcelona..."):
-                G, g_msg = load_or_build_graph()
-                if g_msg:
-                    st.error(g_msg)
-                elif G:
-                    with st.spinner("🧮 Calculando rutas alternativas..."):
-                        routes, error = calculate_alternative_routes(
-                            G,
-                            st.session_state.predictions_data,
-                            model_data.get('cluster_geometries', {}),
-                            st.session_state.route_origin,
-                            st.session_state.route_destination,
-                            vehicle_type
-                        )
-                        if error:
-                            st.error(error)
-                        elif routes:
-                            st.session_state.route_alternatives = routes
-                            st.session_state.selected_route = None
-        
-        # Mostrar alternativas si existen
-        if st.session_state.route_alternatives:
-            st.subheader("🔄 Comparación de Rutas")
-            
-            tabs = st.tabs(list(st.session_state.route_alternatives.keys()))
-            
-            for tab, (route_name, route_data) in zip(tabs, st.session_state.route_alternatives.items()):
-                with tab:
-                    # Tarjeta de resumen de ruta
-                    avg_risk = route_data.get('avg_risk', 0.0)
-                    safety_score = get_route_safety_score(route_data)
-                    safety_badge = get_safety_badge(avg_risk)
-                    
-                    st.markdown(f"""
-                    <div class='route-card'>
-                        <h3>{route_name}</h3>
-                        <div style='display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-top: 15px;'>
-                            <div style='text-align: center;'>
-                                <h4>📏 Distancia</h4>
-                                <p style='font-size: 24px; margin: 0;'>{route_data['km']:.1f} km</p>
-                            </div>
-                            <div style='text-align: center;'>
-                                <h4>⏱️ Tiempo</h4>
-                                <p style='font-size: 24px; margin: 0;'>{route_data['min']:.0f} min</p>
-                            </div>
-                            <div style='text-align: center;'>
-                                <h4>🛡️ Seguridad</h4>
-                                <p style='font-size: 20px; margin: 0;'>{safety_score:.0f}/100</p>
-                            </div>
-                            <div style='text-align: center;'>
-                                <h4>⭐ Valoración</h4>
-                                <p style='font-size: 18px; margin: 0;'>{safety_badge}</p>
-                            </div>
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    # Mapa de la ruta
-                    route_map = create_enhanced_route_map(
-                        st.session_state.predictions_data,
-                        model_data.get('cluster_geometries', {}),
-                        route_data,
-                        st.session_state.route_origin,
-                        st.session_state.route_destination,
-                        show_gradient=True
-                    )
-                    st_folium(route_map, height=400, key=f"map_{route_name}")
-                    
-                    # Advertencias de la ruta
-                    warnings = analyze_route_warnings(
-                        route_data,
-                        st.session_state.predictions_data,
-                        model_data.get('cluster_geometries', {})
-                    )
-                    
-                    if warnings:
-                        with st.expander("⚠️ Avisos de Seguridad"):
-                            for warning in warnings:
-                                if warning['type'] == 'high':
-                                    st.warning(f"**{warning['message']}**\n\n💡 {warning['suggestion']}")
-                                else:
-                                    st.info(f"{warning['message']}\n\n💡 {warning['suggestion']}")
-                    
-                    # Botón de selección
-                    if st.button(f"✅ Seleccionar {route_name}", key=f"select_{route_name}", use_container_width=True):
-                        st.session_state.selected_route = route_data
-                        st.success(f"✅ Has seleccionado la ruta {route_name}")
-            
-            # Mostrar ruta seleccionada con más detalle
-            if st.session_state.selected_route:
-                st.markdown("---")
-                st.subheader("📋 Ruta Seleccionada - Detalles")
-                
-                selected = st.session_state.selected_route
-                col_details = st.columns(4)
-                
-                with col_details[0]:
-                    st.metric("Distancia Total", f"{selected['km']:.2f} km")
-                
-                with col_details[1]:
-                    st.metric("Tiempo Estimado", f"{selected['min']:.0f} min")
-                
-                with col_details[2]:
-                    avg_speed = (selected['km'] / selected['min']) * 60 if selected['min'] > 0 else 0
-                    st.metric("Velocidad Media", f"{avg_speed:.0f} km/h")
-                
-                with col_details[3]:
-                    st.metric("Índice de Seguridad", f"{get_route_safety_score(selected):.0f}/100")
-                
-                # Información adicional basada en el horario
-                if departure_time:
-                    arrival_time = (datetime.combine(date.today(), departure_time) + 
-                                  timedelta(minutes=int(selected['min']))).time()
-                    st.info(f"🕐 **Salida:** {departure_time.strftime('%H:%M')} → **Llegada estimada:** {arrival_time.strftime('%H:%M')}")
-    
+
+        can_route = (st.session_state.route_origin is not None) and (st.session_state.route_destination is not None) and (G is not None)
+        if st.button("Calcular ruta en coche", type="primary", disabled=not can_route):
+            with st.spinner("Calculando ruta por eje vial y estimando tiempo…"):
+                rr, msg = compute_route_eje_vial(
+                    G_full=G,
+                    predictions_data=st.session_state.predictions_data,
+                    cluster_geometries=model_data.get('cluster_geometries', {}),
+                    origin=st.session_state.route_origin,
+                    destination=st.session_state.route_destination,
+                    buffer_m=buffer_m,
+                    objective=objective_key
+                )
+                st.session_state.route_result = rr
+                if msg:
+                    st.info(msg)
+
+    if st.session_state.route_result:
+        rr = st.session_state.route_result
+        route_map = create_barcelona_map(
+            st.session_state.predictions_data,
+            model_data.get('cluster_geometries', {}),
+            route_coords=rr['coords'],
+            origin=st.session_state.route_origin,
+            destination=st.session_state.route_destination
+        )
+        st_folium(route_map, width=700, height=500)
+        eje_txt = "✅ usando EJE VIAL" if rr.get("used_axis") else "⚠️ fuera de eje (fallback)"
+        penal_txt = f" · Tramos penalizados: **{rr.get('penalized_edges', 0):,}**"
+        st.success(
+            f"{eje_txt} · Distancia: **{rr['distance_km']:.2f} km** · "
+            f"ETA (modo coche): **{rr['eta_min']:.0f} min**{penal_txt}"
+        )
     else:
-        st.info("👆 Selecciona un origen y destino para calcular rutas seguras")
-    
+        st.info("Haz dos clics en el mapa para fijar **Origen** y **Destino**, luego pulsa **Calcular ruta en coche**.")
+
     # Tabs para análisis histórico
     st.header("📈 Análisis Histórico Completo")
     tab1, tab2, tab3, tab4 = st.tabs(["📊 Por Hora", "📅 Por Mes", "📈 Tendencia Anual", "🔥 Mapa de Calor"])
