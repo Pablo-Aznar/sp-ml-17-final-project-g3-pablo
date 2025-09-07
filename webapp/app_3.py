@@ -1063,17 +1063,6 @@ def main():
     st.sidebar.write(f"**Viento:** {wind_speed:.0f} km/h")
     st.sidebar.caption("Centro BCN • Datos Open-Meteo")
 
-    # Botón de predicción
-    if st.sidebar.button("🔮 Actualizar Predicciones", type="primary"):
-        st.session_state.update_predictions = True
-        st.session_state.prediction_params = {
-            'date': prediction_date,
-            'hour': prediction_hour,
-            'temperature': temperature,
-            'precipitation': precipitation,
-            'wind_speed': wind_speed
-        }
-
     # Históricos
     historical_data = model_data.get('historical_data', {})
     if historical_data:
@@ -1085,6 +1074,16 @@ def main():
             for i, (cluster_id, accidents) in enumerate(list(historical_data['most_dangerous_clusters'].items())[:3], 1):
                 st.sidebar.write(f"{i}. Zona {cluster_id}: {accidents:,}")
     
+    # Botón de predicción
+    if st.sidebar.button("🔮 Actualizar Predicciones", type="primary"):
+        st.session_state.update_predictions = True
+        st.session_state.prediction_params = {
+            'date': prediction_date,
+            'hour': prediction_hour,
+            'temperature': temperature,
+            'precipitation': precipitation,
+            'wind_speed': wind_speed
+        }
     
     # State
     if 'predictions_data' not in st.session_state:

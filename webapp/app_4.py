@@ -11,8 +11,6 @@ warnings.filterwarnings('ignore')
 import json
 import hashlib
 from urllib.parse import quote
-from geopy.geocoders import Nominatim
-import streamlit_searchbox as stx
 
 # === NUEVOS IMPORTS para ruteo vial y ETA ===
 import os
@@ -190,38 +188,7 @@ def geocode_address(address):
         st.error(f"Error geocoding: {e}")
     
     return None
-# Reemplazar selección por clics con búsqueda de direcciones
-from geopy.geocoders import Nominatim
-import streamlit_searchbox as stx
 
-@st.cache_data
-def search_barcelona_address(search_term):
-    """Buscar direcciones en Barcelona con autocompletado"""
-    geolocator = Nominatim(user_agent="bcn_accidents")
-    results = geolocator.geocode(
-        f"{search_term}, Barcelona, España", 
-        exactly_one=False, 
-        limit=5
-    )
-    return [(r.address, (r.latitude, r.longitude)) for r in results] if results else []
-
-# En la UI:
-st.subheader("🚗 Planificador de Ruta Segura")
-col_origin, col_dest = st.columns(2)
-
-with col_origin:
-    origin_address = st_searchbox(
-        search_barcelona_address,
-        placeholder="📍 Dirección de origen (ej: Sagrada Familia)",
-        key="origin_search"
-    )
-
-with col_dest:
-    dest_address = st_searchbox(
-        search_barcelona_address,
-        placeholder="🎯 Dirección de destino (ej: Park Güell)",
-        key="dest_search"
-    )
 @st.cache_data(ttl=3600)
 def search_addresses(query, limit=5):
     """Buscar direcciones que coincidan con la consulta"""
@@ -724,6 +691,90 @@ def get_safety_badge(risk_level):
     else:
         return "⭐ Alto Riesgo"
 
+# === NUEVAS FUNCIONES AÑADIDAS ===
+def get_next_hour():
+    """
+    Obtener la siguiente hora completa (minutos = 0)
+    Maneja el cambio de día automáticamente
+    """
+    now = datetime.now()
+    next_hour = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+    
+    # Si cambia el día, ajustar fecha también
+    next_date = next_hour.date()
+    next_hour_value = next_hour.hour
+    
+    return next_date, next_hour_value
+
+@st.cache_data(ttl=300)  # Cache de 5 minutos para evitar muchas consultas
+def get_address_suggestions(query_text):
+    """
+    Obtener sugerencias de direcciones para autocompletado
+    Solo se ejecuta si query_text tiene 3+ caracteres
+    """
+    if len(query_text.strip()) < 3:
+        return []
+    
+    suggestions = search_addresses(query_text, limit=5)
+    # Formatear las sugerencias para el dropdown
+    options = []
+    for suggestion in suggestions:
+        # Limitar la longitud del texto mostrado
+        display_text = suggestion['address']
+        if len(display_text) > 80:
+            display_text = display_text[:77] + "..."
+        options.append({
+            'display': display_text,
+            'coords': (suggestion['lat'], suggestion['lon']),
+            'full_address': suggestion['address']
+        })
+    
+    return options
+
+def create_address_autocomplete(label, key_prefix, placeholder_text):
+    """
+    Crear un campo de autocompletado para direcciones
+    Devuelve las coordenadas seleccionadas o None
+    """
+    # Campo de texto para escribir
+    query = st.text_input(
+        f"Escribe para buscar {label.lower()}",
+        placeholder=placeholder_text,
+        key=f"{key_prefix}_query"
+    )
+    
+    selected_coords = None
+    
+    # Solo mostrar sugerencias si hay 3+ caracteres
+    if len(query.strip()) >= 3:
+        with st.spinner("Buscando direcciones..."):
+            suggestions = get_address_suggestions(query)
+        
+        if suggestions:
+            # Crear opciones para el selectbox
+            options = ["Selecciona una dirección..."] + [s['display'] for s in suggestions]
+            
+            selected = st.selectbox(
+                f"Sugerencias para {label.lower()}:",
+                options=options,
+                key=f"{key_prefix}_select"
+            )
+            
+            # Si se selecciona una opción válida
+            if selected != "Selecciona una dirección..." and selected in [s['display'] for s in suggestions]:
+                # Encontrar las coordenadas correspondientes
+                for suggestion in suggestions:
+                    if suggestion['display'] == selected:
+                        selected_coords = suggestion['coords']
+                        st.success(f"✅ {label} seleccionado: {suggestion['full_address'][:50]}...")
+                        break
+        else:
+            st.info("No se encontraron direcciones. Prueba con otros términos.")
+    elif len(query.strip()) > 0:
+        st.info("Escribe al menos 3 caracteres para buscar direcciones")
+    
+    return selected_coords
+
 def analyze_route_warnings(route_data, predictions_data, cluster_geometries):
     """Analizar la ruta y generar advertencias específicas"""
     warnings = []
@@ -1064,15 +1115,28 @@ def main():
     # Sidebar
     st.sidebar.header("🎛️ Parámetros de Predicción")
     st.sidebar.subheader("📅 Fecha y Hora")
+    
+    # === MODIFICACIÓN: Usar get_next_hour() ===
     today = datetime.now().date()
     max_date = today + timedelta(days=30)
+    
+    # Calcular fecha y hora siguiente
+    next_date, next_hour = get_next_hour()
+    
     prediction_date = st.sidebar.date_input(
-        "Fecha (máx. 30 días)", value=today, min_value=today, max_value=max_date
+        "Fecha (máx. 30 días)", 
+        value=next_date,  # CAMBIO: usar next_date en lugar de today
+        min_value=today, 
+        max_value=max_date
     )
+    
     prediction_hour = st.sidebar.selectbox(
-        "Hora", options=list(range(24)), index=datetime.now().hour,
+        "Hora", 
+        options=list(range(24)), 
+        index=next_hour,  # CAMBIO: usar next_hour en lugar de datetime.now().hour
         format_func=lambda x: f"{x:02d}:00"
     )
+    
     day_of_week = prediction_date.weekday()
     day_names = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo']
     is_weekend = day_of_week >= 5
@@ -1270,46 +1334,41 @@ def main():
                         st.success(f"✅ Destino: {place}")
                         st.session_state.route_alternatives = None
     
-    # TAB 2: BÚSQUEDA DE DIRECCIONES
+    # TAB 2: BÚSQUEDA DE DIRECCIONES CON AUTOCOMPLETADO (MODIFICADO)
     with tab_address:
         if GEOPY_AVAILABLE:
+            st.markdown("### 🔍 Búsqueda Inteligente de Direcciones")
+            st.caption("Escribe al menos 3 caracteres para ver sugerencias automáticas")
+            
             col_addr = st.columns(2)
             
             with col_addr[0]:
                 st.write("**🟢 Buscar dirección de origen:**")
-                origin_address = st.text_input(
-                    "Escribe la dirección",
-                    placeholder="Ej: Carrer de Balmes 123",
-                    key="origin_address_input"
+                origin_coords = create_address_autocomplete(
+                    label="origen",
+                    key_prefix="origin_addr",
+                    placeholder_text="Ej: Carrer de Balmes 123"
                 )
-                if st.button("Buscar Origen", key="search_origin"):
-                    if origin_address:
-                        with st.spinner("Buscando dirección..."):
-                            result = geocode_address(origin_address)
-                            if result:
-                                st.session_state.route_origin = (result['lat'], result['lon'])
-                                st.success(f"✅ Origen encontrado: {result['address'][:50]}...")
-                                st.session_state.route_alternatives = None
-                            else:
-                                st.error("No se encontró la dirección")
+                
+                # Botón para establecer origen
+                if origin_coords and st.button("Establecer como Origen", key="set_origin", use_container_width=True):
+                    st.session_state.route_origin = origin_coords
+                    st.session_state.route_alternatives = None
+                    st.success("✅ Origen establecido correctamente")
             
             with col_addr[1]:
                 st.write("**🔴 Buscar dirección de destino:**")
-                dest_address = st.text_input(
-                    "Escribe la dirección",
-                    placeholder="Ej: Passeig de Gràcia 45",
-                    key="dest_address_input"
+                dest_coords = create_address_autocomplete(
+                    label="destino", 
+                    key_prefix="dest_addr",
+                    placeholder_text="Ej: Passeig de Gràcia 45"
                 )
-                if st.button("Buscar Destino", key="search_dest"):
-                    if dest_address:
-                        with st.spinner("Buscando dirección..."):
-                            result = geocode_address(dest_address)
-                            if result:
-                                st.session_state.route_destination = (result['lat'], result['lon'])
-                                st.success(f"✅ Destino encontrado: {result['address'][:50]}...")
-                                st.session_state.route_alternatives = None
-                            else:
-                                st.error("No se encontró la dirección")
+                
+                # Botón para establecer destino
+                if dest_coords and st.button("Establecer como Destino", key="set_dest", use_container_width=True):
+                    st.session_state.route_destination = dest_coords
+                    st.session_state.route_alternatives = None
+                    st.success("✅ Destino establecido correctamente")
         else:
             st.warning("Instala 'geopy' para habilitar la búsqueda de direcciones: pip install geopy")
     
