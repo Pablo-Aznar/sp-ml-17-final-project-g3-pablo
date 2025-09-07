@@ -527,7 +527,7 @@ def create_prediction_function(_model_data):
         return {
             'probability': prob,
             'prediction': int(prob >= _model_data['optimal_threshold']),
-            'risk_level': 'Alto' if prob >= 0.10 else ('Medio' if prob >= 0.05 else 'Bajo')
+            'risk_level': 'Alto' if prob >= 0.10 else ('Medio' if prob >= 0.07 else 'Bajo')
         }
 
     return predict_risk
@@ -535,7 +535,7 @@ def create_prediction_function(_model_data):
 def get_risk_color(probability):
     if probability >= 0.10:
         return '#e74c3c'
-    elif probability >= 0.05:
+    elif probability >= 0.07:
         return '#f39c12'
     else:
         return '#27ae60'
@@ -1298,7 +1298,7 @@ def main():
                     prediction['probability'] = min(0.99, prediction['probability'])
                 # Recalcular nivel
                 prediction['risk_level'] = ('Alto' if prediction['probability'] >= 0.10
-                                            else 'Medio' if prediction['probability'] >= 0.05 else 'Bajo')
+                                            else 'Medio' if prediction['probability'] >= 0.07 else 'Bajo')
                 prediction['prediction'] = int(prediction['probability'] >= model_data['optimal_threshold'])
                 predictions_data[cluster_id] = prediction
                 probabilities_debug.append(prediction['probability'])
@@ -1370,8 +1370,8 @@ def main():
                 st.metric("Prob. Promedio", f"{avg_probability*100:.1f}%")
             st.subheader("🎨 Leyenda")
             st.markdown("🔴 **Alto Riesgo** (≥10%)")
-            st.markdown("🟠 **Riesgo Medio** (5-10%)")
-            st.markdown("🟢 **Bajo Riesgo** (<5%)")
+            st.markdown("🟠 **Riesgo Medio** (7-10%)")
+            st.markdown("🟢 **Bajo Riesgo** (<7%)")
             st.subheader("⚠️ Top Zonas de Riesgo Actual")
             sorted_areas = sorted(
                 st.session_state.predictions_data.items(),

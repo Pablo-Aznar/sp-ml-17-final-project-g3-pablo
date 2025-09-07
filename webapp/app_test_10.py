@@ -410,9 +410,10 @@ def get_traffic_conditions(lat1, lon1, lat2, lon2, current_hour=None):
         'description': f"Factor de tráfico: {traffic_multiplier:.1f}x"
     }
 
-def generate_google_maps_url(origin, destination, waypoints=None):
+def generate_google_maps_url(origin, destination, route_coords=None):
     """
     Generar URL de Google Maps para navegación
+    Si route_coords se proporciona, incluye waypoints de la ruta específica
     """
     base_url = "https://www.google.com/maps/dir/"
     
@@ -426,18 +427,24 @@ def generate_google_maps_url(origin, destination, waypoints=None):
     # Añadir parámetros
     params = "?travelmode=driving"
     
-    # Si hay waypoints, añadirlos
-    if waypoints and len(waypoints) > 0:
-        waypoints_str = "|".join([f"{wp[0]},{wp[1]}" for wp in waypoints[:8]])  # Max 8 waypoints
-        params += f"&waypoints={quote(waypoints_str)}"
+    # Si hay coordenadas de ruta específica, añadir waypoints
+    if route_coords and len(route_coords) > 2:
+        # Seleccionar waypoints intermedios (máximo 8 para Google Maps)
+        # Tomar puntos distribuidos uniformemente por la ruta
+        total_points = len(route_coords)
+        if total_points > 10:
+            # Seleccionar cada N puntos para tener máximo 8 waypoints
+            step = max(1, (total_points - 2) // 8)
+            waypoints = route_coords[1:-1:step][:8]  # Excluir origen y destino
+        else:
+            waypoints = route_coords[1:-1]  # Todos los puntos intermedios
+        
+        if waypoints:
+            waypoints_str = "|".join([f"{wp[0]},{wp[1]}" for wp in waypoints])
+            params += f"&waypoints={quote(waypoints_str)}"
     
     return url + params
 
-def generate_waze_url(origin, destination):
-    """
-    Generar URL de Waze para navegación
-    """
-    return f"https://www.waze.com/ul?ll={destination[0]},{destination[1]}&navigate=yes&from={origin[0]},{origin[1]}"
 
 # -----------------------------
 #   Carga de modelo
@@ -527,7 +534,7 @@ def create_prediction_function(_model_data):
         return {
             'probability': prob,
             'prediction': int(prob >= _model_data['optimal_threshold']),
-            'risk_level': 'Alto' if prob >= 0.10 else ('Medio' if prob >= 0.07 else 'Bajo')
+            'risk_level': 'Alto' if prob >= 0.10 else ('Medio' if prob >= 0.05 else 'Bajo')
         }
 
     return predict_risk
@@ -535,7 +542,7 @@ def create_prediction_function(_model_data):
 def get_risk_color(probability):
     if probability >= 0.10:
         return '#e74c3c'
-    elif probability >= 0.07:
+    elif probability >= 0.05:
         return '#f39c12'
     else:
         return '#27ae60'
@@ -1298,7 +1305,7 @@ def main():
                     prediction['probability'] = min(0.99, prediction['probability'])
                 # Recalcular nivel
                 prediction['risk_level'] = ('Alto' if prediction['probability'] >= 0.10
-                                            else 'Medio' if prediction['probability'] >= 0.07 else 'Bajo')
+                                            else 'Medio' if prediction['probability'] >= 0.05 else 'Bajo')
                 prediction['prediction'] = int(prediction['probability'] >= model_data['optimal_threshold'])
                 predictions_data[cluster_id] = prediction
                 probabilities_debug.append(prediction['probability'])
@@ -1370,8 +1377,8 @@ def main():
                 st.metric("Prob. Promedio", f"{avg_probability*100:.1f}%")
             st.subheader("🎨 Leyenda")
             st.markdown("🔴 **Alto Riesgo** (≥10%)")
-            st.markdown("🟠 **Riesgo Medio** (7-10%)")
-            st.markdown("🟢 **Bajo Riesgo** (<7%)")
+            st.markdown("🟠 **Riesgo Medio** (5-10%)")
+            st.markdown("🟢 **Bajo Riesgo** (<5%)")
             st.subheader("⚠️ Top Zonas de Riesgo Actual")
             sorted_areas = sorted(
                 st.session_state.predictions_data.items(),
@@ -1719,7 +1726,13 @@ def main():
                     st.metric("Tiempo Estimado", f"{adjusted_time:.0f} min")
                 
                 with col_details[2]:
-                    avg_speed = (selected['km'] / adjusted_time) * 60 if adjusted_time > 0 else 0
+                    if adjusted_time > 0:
+                        avg_speed = (selected['km'] / adjusted_time) * 60
+                        # Limitar velocidad a valores realistas para ciudad (máximo 50 km/h)
+                        avg_speed = min(avg_speed, 50)
+                        avg_speed = max(avg_speed, 5)  # Mínimo 5 km/h
+                    else:
+                        avg_speed = 0
                     st.metric("Velocidad Media", f"{avg_speed:.0f} km/h")
                 
                 with col_details[3]:
@@ -1748,38 +1761,48 @@ def main():
                 st.info(f"🕐 **Salida:** {departure_time.strftime('%H:%M')} → **Llegada estimada:** {arrival_time.strftime('%H:%M')}")
                 
                 # Enlaces de navegación
-                st.subheader("🧭 Navegar con tu app favorita")
+                st.subheader("🧭 Opciones de Navegación")
                 nav_cols = st.columns(3)
-                
+
                 with nav_cols[0]:
-                    google_url = generate_google_maps_url(
-                        st.session_state.route_origin,
-                        st.session_state.route_destination
-                    )
-                    st.markdown(f"""
-                    <a href="{google_url}" target="_blank" style="text-decoration: none;">
-                        <div style="background: #4285F4; color: white; padding: 10px; border-radius: 5px; text-align: center;">
-                            🗺️ Abrir en Google Maps
-                        </div>
-                    </a>
-                    """, unsafe_allow_html=True)
-                
+                    # Opción 1: Ruta segura calculada por la app
+                    if 'coords' in selected:
+                        google_safe_url = generate_google_maps_url(
+                            st.session_state.route_origin,
+                            st.session_state.route_destination,
+                            selected['coords']  # Incluir waypoints de la ruta calculada
+                        )
+                        st.markdown(f"""
+                        <a href="{google_safe_url}" target="_blank" style="text-decoration: none;">
+                            <div style="background: #27ae60; color: white; padding: 10px; border-radius: 5px; text-align: center; margin-bottom: 10px;">
+                                🛡️ Mi Ruta Segura<br>
+                                <small>Con waypoints calculados</small>
+                            </div>
+                        </a>
+                        """, unsafe_allow_html=True)
+                    else:
+                        st.info("Ruta segura no disponible")
+
                 with nav_cols[1]:
-                    waze_url = generate_waze_url(
+                    # Opción 2: Ruta directa de Google Maps
+                    google_direct_url = generate_google_maps_url(
                         st.session_state.route_origin,
                         st.session_state.route_destination
+                        # Sin route_coords = ruta directa
                     )
                     st.markdown(f"""
-                    <a href="{waze_url}" target="_blank" style="text-decoration: none;">
-                        <div style="background: #32CCFE; color: white; padding: 10px; border-radius: 5px; text-align: center;">
-                            🚗 Abrir en Waze
+                    <a href="{google_direct_url}" target="_blank" style="text-decoration: none;">
+                        <div style="background: #4285F4; color: white; padding: 10px; border-radius: 5px; text-align: center; margin-bottom: 10px;">
+                            🗺️ Ruta Directa<br>
+                            <small>Google Maps estándar</small>
                         </div>
                     </a>
                     """, unsafe_allow_html=True)
-                
+
                 with nav_cols[2]:
-                    # Copiar coordenadas
-                    coords_text = f"{st.session_state.route_origin[0]},{st.session_state.route_origin[1]} → {st.session_state.route_destination[0]},{st.session_state.route_destination[1]}"
+                    # Coordenadas para referencia
+                    st.write("**Coordenadas:**")
+                    coords_text = f"{st.session_state.route_origin[0]:.4f},{st.session_state.route_origin[1]:.4f} → {st.session_state.route_destination[0]:.4f},{st.session_state.route_destination[1]:.4f}"
                     st.code(coords_text, language=None)
     
     else:
