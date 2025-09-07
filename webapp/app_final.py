@@ -18,6 +18,9 @@ import os
 import re
 import networkx as nx
 from math import radians, sin, cos, asin, sqrt
+from shapely.geometry import LineString, Point
+from shapely.ops import linemerge
+import geopandas as gpd
 
 # === Open-Meteo ===
 import requests
@@ -44,6 +47,15 @@ try:
 except Exception:
     SCIPY_AVAILABLE = False
 
+# === Shapely para geometría avanzada ===
+try:
+    from shapely.geometry import LineString, Point
+    from shapely.ops import linemerge
+    SHAPELY_AVAILABLE = True
+except Exception:
+    SHAPELY_AVAILABLE = False
+    st.warning("⚠️ Instala shapely para geometría avanzada: pip install shapely")
+
 # === ZONA HORARIA DE BARCELONA ===
 BARCELONA_TZ = pytz.timezone('Europe/Madrid')
 
@@ -52,6 +64,19 @@ BARCELONA_DISTRICTS = [
     'Ciutat Vella', 'Eixample', 'Sants-Montjuïc', 'Les Corts', 'Sarrià-Sant Gervasi',
     'Gràcia', 'Horta-Guinardó', 'Nou Barris', 'Sant Andreu', 'Sant Martí'
 ]
+
+# === TIPOS DE CARRETERA PARA COCHES (Optimizado para Barcelona) ===
+ALLOWED_HIGHWAY_TYPES = {
+    'motorway', 'trunk', 'primary', 'secondary', 'tertiary', 
+    'unclassified', 'residential', 'motorway_link', 'trunk_link', 
+    'primary_link', 'secondary_link', 'tertiary_link'
+}
+
+# === FILTROS ESPECÍFICOS BARCELONA ===
+EXCLUDED_HIGHWAY_TYPES = {
+    'cycleway', 'footway', 'pedestrian', 'path', 'steps', 
+    'track', 'service', 'living_street', 'construction'
+}
 
 # === FESTIVOS DE BARCELONA 2025 ===
 FESTIVOS_BARCELONA_2025 = {
@@ -527,7 +552,7 @@ def create_prediction_function(_model_data):
         return {
             'probability': prob,
             'prediction': int(prob >= _model_data['optimal_threshold']),
-            'risk_level': 'Alto' if prob >= 0.10 else ('Medio' if prob >= 0.07 else 'Bajo')
+            'risk_level': 'Alto' if prob >= 0.10 else ('Medio' if prob >= 0.05 else 'Bajo')
         }
 
     return predict_risk
@@ -535,7 +560,7 @@ def create_prediction_function(_model_data):
 def get_risk_color(probability):
     if probability >= 0.10:
         return '#e74c3c'
-    elif probability >= 0.07:
+    elif probability >= 0.05:
         return '#f39c12'
     else:
         return '#27ae60'
@@ -546,7 +571,7 @@ def get_gradient_color(risk_value):
         # Verde a amarillo
         ratio = risk_value / 0.05
         r = int(39 + (243 - 39) * ratio)
-        g = int(174 + (156 - 174) * ratio)
+        g = int(174 + (243 - 174) * ratio)
         b = int(96 + (18 - 96) * ratio)
     else:
         # Amarillo a rojo
@@ -567,28 +592,203 @@ def haversine(lat1, lon1, lat2, lon2):
     return 2 * R * asin(sqrt(a))
 
 # -----------------------------
-#   Red vial OSMnx
+#   Red vial OSMnx OPTIMIZADA PARA BARCELONA
 # -----------------------------
 GRAPH_DIR = "./data/graph"
-GRAPH_PATH = os.path.join(GRAPH_DIR, "barcelona_drive.graphml")
+GRAPH_PATH = os.path.join(GRAPH_DIR, "barcelona_drive_detailed.graphml")
+GRAPH_GEOMETRY_PATH = os.path.join(GRAPH_DIR, "barcelona_geometry.json")
+
+def filter_graph_for_cars(G):
+    """
+    Filtrar el grafo para quedarse solo con carreteras transitables por coches
+    """
+    if G is None:
+        return None
+    
+    # Crear copia del grafo
+    G_filtered = G.copy()
+    
+    # Lista de aristas a eliminar
+    edges_to_remove = []
+    
+    for u, v, k, data in G_filtered.edges(keys=True, data=True):
+        highway = data.get('highway', '')
+        
+        # Convertir a lista si es string
+        if isinstance(highway, str):
+            highway_types = [highway]
+        else:
+            highway_types = highway if isinstance(highway, list) else [str(highway)]
+        
+        # Verificar si algún tipo de carretera está excluido
+        should_remove = False
+        for hw_type in highway_types:
+            if hw_type in EXCLUDED_HIGHWAY_TYPES:
+                should_remove = True
+                break
+            # También verificar que esté en tipos permitidos
+            if hw_type not in ALLOWED_HIGHWAY_TYPES:
+                should_remove = True
+                break
+        
+        # Verificar restricciones de acceso
+        access = data.get('access', '')
+        motor_vehicle = data.get('motor_vehicle', '')
+        
+        if access in ['no', 'private', 'customers'] or motor_vehicle == 'no':
+            should_remove = True
+        
+        if should_remove:
+            edges_to_remove.append((u, v, k))
+    
+    # Eliminar aristas filtradas
+    G_filtered.remove_edges_from(edges_to_remove)
+    
+    # Eliminar nodos aislados
+    isolated_nodes = list(nx.isolates(G_filtered))
+    G_filtered.remove_nodes_from(isolated_nodes)
+    
+    return G_filtered
+
+def extract_edge_geometry(G):
+    """
+    Extraer y guardar la geometría real de cada arista
+    """
+    edge_geometries = {}
+    
+    for u, v, k, data in G.edges(keys=True, data=True):
+        edge_id = f"{u}_{v}_{k}"
+        
+        # Obtener coordenadas de nodos
+        u_coords = (G.nodes[u]['y'], G.nodes[u]['x'])
+        v_coords = (G.nodes[v]['y'], G.nodes[v]['x'])
+        
+        # Verificar si hay geometría en los datos
+        geometry = data.get('geometry', None)
+        
+        if geometry is not None and SHAPELY_AVAILABLE:
+            # Extraer coordenadas de la geometría
+            if hasattr(geometry, 'coords'):
+                coords = [(lat, lon) for lon, lat in geometry.coords]
+            else:
+                coords = [u_coords, v_coords]
+        else:
+            # Usar solo puntos de inicio y fin
+            coords = [u_coords, v_coords]
+        
+        edge_geometries[edge_id] = {
+            'coords': coords,
+            'length': data.get('length', 0),
+            'highway': data.get('highway', 'unknown')
+        }
+    
+    return edge_geometries
+
+def interpolate_edge_coordinates(coords, max_segment_length_m=50):
+    """
+    Interpolar puntos adicionales en segmentos largos para visualización suave
+    """
+    if not SHAPELY_AVAILABLE or len(coords) < 2:
+        return coords
+    
+    try:
+        # Crear LineString
+        line = LineString([(lon, lat) for lat, lon in coords])
+        
+        # Calcular longitud total en metros (aproximado)
+        total_length_deg = line.length
+        total_length_m = total_length_deg * 111000  # Conversión aprox de grados a metros
+        
+        # Si el segmento es corto, no interpolar
+        if total_length_m < max_segment_length_m:
+            return coords
+        
+        # Calcular número de puntos a interpolar
+        num_points = int(total_length_m / max_segment_length_m)
+        num_points = min(num_points, 50)  # Límite máximo
+        
+        # Generar puntos interpolados
+        interpolated_coords = []
+        for i in range(num_points + 1):
+            fraction = i / num_points
+            point = line.interpolate(fraction, normalized=True)
+            interpolated_coords.append((point.y, point.x))  # lat, lon
+        
+        return interpolated_coords
+    
+    except Exception:
+        return coords
 
 @st.cache_data(show_spinner=True)
 def load_or_build_graph():
+    """
+    Cargar o construir grafo detallado optimizado para Barcelona
+    """
     if not OSMNX_AVAILABLE:
-        return None, "OSMnx no está instalado. Ejecuta: pip install osmnx"
+        return None, None, "OSMnx no está instalado. Ejecuta: pip install osmnx"
+    
     os.makedirs(GRAPH_DIR, exist_ok=True)
-    if os.path.exists(GRAPH_PATH):
+    
+    # Intentar cargar grafo existente
+    if os.path.exists(GRAPH_PATH) and os.path.exists(GRAPH_GEOMETRY_PATH):
         try:
+            st.info("📂 Cargando grafo detallado desde caché...")
             G = ox.load_graphml(GRAPH_PATH)
-            return G, None
+            
+            with open(GRAPH_GEOMETRY_PATH, 'r') as f:
+                edge_geometries = json.load(f)
+            
+            st.success("✅ Grafo detallado cargado correctamente")
+            return G, edge_geometries, None
+            
         except Exception as e:
-            return None, f"Error cargando graphml cacheado: {e}"
+            st.warning(f"⚠️ Error cargando caché, descargando de nuevo: {e}")
+    
+    # Descargar y procesar grafo
     try:
-        G = ox.graph_from_place("Barcelona, Spain", network_type="drive", simplify=True)
-        ox.save_graphml(G, GRAPH_PATH)
-        return G, None
+        st.info("🌍 Descargando red vial detallada de Barcelona...")
+        
+        # Configurar OSMnx para mayor detalle
+        ox.settings.use_cache = True
+        ox.settings.log_console = False
+        
+        # Descargar grafo SIN simplificar para mayor precisión
+        G = ox.graph_from_place(
+            "Barcelona, Spain", 
+            network_type="drive", 
+            simplify=False,  # CLAVE: No simplificar para mantener geometría
+            retain_all=False,
+            truncate_by_edge=True,
+            custom_filter=None  # Usar filtro por defecto para carreteras
+        )
+        
+        # IMPORTANTE: Asegurar que el grafo respeta direcciones de circulación
+        # OSMnx por defecto crea grafos dirigidos, pero lo hacemos explícito
+        if not G.is_directed():
+            st.warning("⚠️ Convirtiendo a grafo dirigido para respetar direcciones de tráfico")
+            G = G.to_directed()
+        
+        st.info("🚗 Filtrando carreteras para coches...")
+        G_filtered = filter_graph_for_cars(G)
+        
+        if G_filtered is None or len(G_filtered.edges()) == 0:
+            return None, None, "Error: Grafo filtrado está vacío"
+        
+        st.info("📐 Extrayendo geometría de carreteras...")
+        edge_geometries = extract_edge_geometry(G_filtered)
+        
+        # Guardar en caché
+        st.info("💾 Guardando en caché...")
+        ox.save_graphml(G_filtered, GRAPH_PATH)
+        
+        with open(GRAPH_GEOMETRY_PATH, 'w') as f:
+            json.dump(edge_geometries, f, indent=2)
+        
+        st.success(f"✅ Grafo detallado creado: {len(G_filtered.nodes())} nodos, {len(G_filtered.edges())} aristas")
+        return G_filtered, edge_geometries, None
+        
     except Exception as e:
-        return None, f"No se pudo descargar la red de Barcelona: {e}"
+        return None, None, f"No se pudo descargar la red de Barcelona: {e}"
 
 def parse_maxspeed(value):
     if value is None:
@@ -608,14 +808,16 @@ def parse_maxspeed(value):
 DEFAULT_SPEEDS = {
     "motorway": 80, "trunk": 60, "primary": 50,
     "secondary": 50, "tertiary": 40, "unclassified": 30,
-    "residential": 30, "service": 20, "living_street": 10
+    "residential": 30, "service": 20, "living_street": 10,
+    "motorway_link": 60, "trunk_link": 50, "primary_link": 40,
+    "secondary_link": 40, "tertiary_link": 30
 }
 
 VEHICLE_SPEED_FACTORS = {
-    "🚗 Coche": 1.0,
-    "🏍️ Moto": 1.1,  # Motos pueden ir un poco más rápido en tráfico
-    "🚲 Bicicleta": 0.3,  # Mucho más lento
-    "🚚 Camión": 0.85,  # Más lento que coches
+    "🚗 Coche": 0.3,  # Mucho más lento en ciudad por tráfico real
+    "🏍️ Moto": 0.4,  # Algo más rápido que coches en tráfico
+    "🚲 Bicicleta": 0.08,  # Mucho más lento
+    "🚚 Camión": 0.25,  # Más lento que coches
 }
 
 VEHICLE_RISK_FACTORS = {
@@ -686,7 +888,7 @@ def build_cluster_kdtree(cluster_geometries, predictions_data):
 def precompute_edge_costs(G, predictions_data, cluster_geometries, buffer_m=200.0, 
                          objective="balanced", vehicle_type="🚗 Coche", traffic_multiplier=1.0):
     """
-    Para cada arista con factor de tráfico añadido
+    Para cada arista con factor de tráfico añadido - OPTIMIZADO
     """
     if G is None or predictions_data is None or cluster_geometries is None:
         return 0
@@ -742,12 +944,20 @@ def precompute_edge_costs(G, predictions_data, cluster_geometries, buffer_m=200.
 
     return penalized
 
-def route_between_nodes(G, src, dst):
+def route_between_nodes(G, src, dst, edge_geometries=None):
+    """
+    Calcular ruta entre nodos con geometría real de carreteras
+    """
     try:
         path = nx.shortest_path(G, src, dst, weight='route_weight')
     except nx.NetworkXNoPath:
         return None
-    coords = [(G.nodes[n]['y'], G.nodes[n]['x']) for n in path]
+    
+    # Coordenadas básicas (nodos)
+    basic_coords = [(G.nodes[n]['y'], G.nodes[n]['x']) for n in path]
+    
+    # Coordenadas detalladas (con geometría real)
+    detailed_coords = []
     total_km = 0.0
     total_time_min = 0.0
     risks = []
@@ -756,29 +966,65 @@ def route_between_nodes(G, src, dst):
         u, v = path[i], path[i+1]
         best = None
         best_w = 1e18
+        best_key = None
+        
+        # Encontrar la mejor arista entre los nodos
         for k in G[u][v].keys():
             w = G[u][v][k].get('route_weight', None)
             if w is not None and w < best_w:
                 best_w = w
                 best = G[u][v][k]
+                best_key = k
+        
         if best is not None:
             total_km += best.get('length_km', 0.0)
             total_time_min += best.get('time_min', 0.0)
             risks.append(best.get('risk_prob', 0.0))
+            
+            # Añadir geometría detallada si está disponible
+            if edge_geometries and best_key is not None:
+                edge_id = f"{u}_{v}_{best_key}"
+                if edge_id in edge_geometries:
+                    edge_coords = edge_geometries[edge_id]['coords']
+                    # Interpolar para suavizar curvas
+                    interpolated = interpolate_edge_coordinates(edge_coords)
+                    
+                    # Evitar duplicar el último punto del segmento anterior
+                    if detailed_coords and len(interpolated) > 0:
+                        interpolated = interpolated[1:]  # Omitir primer punto
+                    
+                    detailed_coords.extend(interpolated)
+                else:
+                    # Fallback a coordenadas básicas
+                    if i == 0:  # Primer segmento
+                        detailed_coords.extend([basic_coords[i], basic_coords[i+1]])
+                    else:
+                        detailed_coords.append(basic_coords[i+1])
+            else:
+                # Fallback a coordenadas básicas
+                if i == 0:  # Primer segmento
+                    detailed_coords.extend([basic_coords[i], basic_coords[i+1]])
+                else:
+                    detailed_coords.append(basic_coords[i+1])
+    
+    # Si no se pudo generar coordenadas detalladas, usar básicas
+    if not detailed_coords:
+        detailed_coords = basic_coords
     
     return {
         "path": path, 
-        "coords": coords, 
+        "coords": detailed_coords,  # Coordenadas con geometría real
+        "basic_coords": basic_coords,  # Coordenadas básicas de respaldo
         "km": total_km, 
         "min": total_time_min,
         "risks": risks,
         "avg_risk": np.mean(risks) if risks else 0.0
     }
 
-def calculate_alternative_routes(G_full, predictions_data, cluster_geometries,
+def calculate_alternative_routes(G_full, edge_geometries, predictions_data, cluster_geometries,
                                 origin, destination, vehicle_type="🚗 Coche",
                                 traffic_multiplier=1.0):
-    """Calcular 3 rutas alternativas con diferentes prioridades y tráfico"""
+    """Calcular 3 rutas alternativas con diferentes prioridades, tráfico y geometría real"""
     if G_full is None:
         return None, "No hay red vial cargada."
     
@@ -801,7 +1047,7 @@ def calculate_alternative_routes(G_full, predictions_data, cluster_geometries,
         d_node = nearest_osm_node(G_full, destination[0], destination[1])
         
         if o_node and d_node:
-            route = route_between_nodes(G_full, o_node, d_node)
+            route = route_between_nodes(G_full, o_node, d_node, edge_geometries)
             if route:
                 # Ajustar tiempo con tráfico
                 route['min'] = route['min'] * traffic_multiplier
@@ -888,7 +1134,7 @@ def create_clean_barcelona_map():
 
 def create_enhanced_route_map(predictions_data, cluster_geometries, route_data=None, 
                             origin=None, destination=None, show_gradient=True):
-    """Mapa mejorado con gradiente de colores según riesgo"""
+    """Mapa mejorado con gradiente de colores según riesgo y geometría real"""
     center_lat, center_lon = 41.3851, 2.1734
     m = folium.Map(location=[center_lat, center_lon], zoom_start=12, tiles='CartoDB positron')
     
@@ -930,31 +1176,39 @@ def create_enhanced_route_map(predictions_data, cluster_geometries, route_data=N
             popup="🎯 Destino"
         ).add_to(m)
     
-    # Dibujar ruta con gradiente si está disponible
+    # Dibujar ruta con geometría real y gradiente
     if route_data and 'coords' in route_data:
         coords = route_data['coords']
         risks = route_data.get('risks', [])
         
-        if show_gradient and risks:
+        if show_gradient and risks and len(coords) > 2:
             # Dibujar la ruta por segmentos con colores según riesgo
-            for i in range(len(coords)-1):
-                segment = [coords[i], coords[i+1]]
-                risk = risks[i] if i < len(risks) else 0.0
-                color = get_gradient_color(risk)
+            # Dividir coordenadas en segmentos aproximados según los riesgos
+            segments_per_risk = max(1, len(coords) // len(risks))
+            
+            for i, risk in enumerate(risks):
+                start_idx = i * segments_per_risk
+                end_idx = min((i + 1) * segments_per_risk, len(coords))
                 
-                folium.PolyLine(
-                    segment,
-                    color=color,
-                    weight=8,
-                    opacity=0.8
-                ).add_to(m)
+                if start_idx < len(coords) and end_idx <= len(coords) and start_idx < end_idx:
+                    segment_coords = coords[start_idx:end_idx + 1]  # +1 para overlap
+                    color = get_gradient_color(risk)
+                    
+                    folium.PolyLine(
+                        segment_coords,
+                        color=color,
+                        weight=8,
+                        opacity=0.8,
+                        popup=f"Riesgo: {risk*100:.1f}%"
+                    ).add_to(m)
         else:
-            # Ruta simple sin gradiente
+            # Ruta simple sin gradiente pero con geometría real
             folium.PolyLine(
                 coords, 
                 weight=6, 
                 opacity=0.9, 
-                color='#2c3e50'
+                color='#2c3e50',
+                popup="Ruta calculada"
             ).add_to(m)
     
     return m
@@ -1211,6 +1465,10 @@ def main():
     is_weekend = day_of_week >= 5
     is_holiday = is_festivo(prediction_date)
     holiday_name = get_festivo_name(prediction_date)
+    
+    # Botón de predicción en sidebar
+    if st.sidebar.button("🔮 Actualizar Predicciones", type="primary"):
+        st.session_state.update_predictions = True
 
     st.sidebar.subheader("📆 Tipo de día")
     if is_holiday and holiday_name:
@@ -1240,10 +1498,6 @@ def main():
         st.sidebar.write("**Precipitación:** -- mm")
         st.sidebar.write("**Viento:** -- km/h")
     
-    # Botón de predicción en sidebar
-    if st.sidebar.button("🔮 Actualizar Predicciones", type="primary"):
-        st.session_state.update_predictions = True
-        # NO guardar parámetros aquí, se harán en el momento de la predicción
 
     # Históricos
     historical_data = model_data.get('historical_data', {})
@@ -1266,9 +1520,6 @@ def main():
     # Inicializar rutas favoritas
     if 'favorite_routes' not in st.session_state:
         st.session_state.favorite_routes = load_favorite_routes()
-    
-    # ELIMINAR COMPLETAMENTE LA ACTUALIZACIÓN AUTOMÁTICA
-    # NO actualizar cuando cambien los parámetros
     
     # Predicciones - SOLO cuando el usuario pulse el botón
     if st.session_state.get('update_predictions', False):
@@ -1298,7 +1549,7 @@ def main():
                     prediction['probability'] = min(0.99, prediction['probability'])
                 # Recalcular nivel
                 prediction['risk_level'] = ('Alto' if prediction['probability'] >= 0.10
-                                            else 'Medio' if prediction['probability'] >= 0.07 else 'Bajo')
+                                            else 'Medio' if prediction['probability'] >= 0.05 else 'Bajo')
                 prediction['prediction'] = int(prediction['probability'] >= model_data['optimal_threshold'])
                 predictions_data[cluster_id] = prediction
                 probabilities_debug.append(prediction['probability'])
@@ -1370,8 +1621,8 @@ def main():
                 st.metric("Prob. Promedio", f"{avg_probability*100:.1f}%")
             st.subheader("🎨 Leyenda")
             st.markdown("🔴 **Alto Riesgo** (≥10%)")
-            st.markdown("🟠 **Riesgo Medio** (7-10%)")
-            st.markdown("🟢 **Bajo Riesgo** (<7%)")
+            st.markdown("🟠 **Riesgo Medio** (5-10%)")
+            st.markdown("🟢 **Bajo Riesgo** (<5%)")
             st.subheader("⚠️ Top Zonas de Riesgo Actual")
             sorted_areas = sorted(
                 st.session_state.predictions_data.items(),
@@ -1391,10 +1642,10 @@ def main():
 
 
     # ---------------------------
-    # RECOMENDADOR DE RUTA MEJORADO CON MÚLTIPLES OPCIONES
+    # RECOMENDADOR DE RUTA OPTIMIZADO CON GEOMETRÍA REAL
     # ---------------------------
-    st.header("🚦 Planificador de Ruta Segura")
-    st.markdown("Calcula la mejor ruta evitando zonas de alto riesgo de accidentes")
+    st.header("🚦 Planificador de Ruta Segura - Geometría Real")
+    st.markdown("Calcula la mejor ruta evitando zonas de alto riesgo con precisión en carreteras")
     
     # Inicializar estado
     if 'route_origin' not in st.session_state:
@@ -1440,7 +1691,7 @@ def main():
                         st.success(f"✅ Destino: {place}")
                         st.session_state.route_alternatives = None
     
-    # TAB 2: BÚSQUEDA DE DIRECCIONES CON AUTOCOMPLETADO (MODIFICADO PARA BARCELONA)
+    # TAB 2: BÚSQUEDA DE DIRECCIONES CON AUTOCOMPLETADO
     with tab_address:
         if GEOPY_AVAILABLE:
             st.markdown("### 🔍 Búsqueda Inteligente de Direcciones")
@@ -1554,7 +1805,7 @@ def main():
         )
     
     with col_config[1]:
-        # === MODIFICACIÓN: Sincronizar con hora de predicción ===
+        # Sincronizar con hora de predicción
         departure_hour = prediction_hour
         departure_time = datetime.strptime(f"{departure_hour:02d}:00", "%H:%M").time()
         st.write("**Hora de salida:**")
@@ -1582,7 +1833,7 @@ def main():
         traffic_info = get_traffic_conditions(
             st.session_state.route_origin[0], st.session_state.route_origin[1],
             st.session_state.route_destination[0], st.session_state.route_destination[1],
-            departure_hour  # CAMBIO: usar departure_hour en lugar de departure_time.hour
+            departure_hour
         )
         traffic_multiplier = traffic_info['multiplier']
         
@@ -1599,15 +1850,15 @@ def main():
     
     if can_route:
         # Botón para calcular rutas
-        if st.button("🔍 Buscar Rutas Alternativas", type="primary", use_container_width=True):
-            with st.spinner("🗺️ Cargando red vial de Barcelona..."):
-                G, g_msg = load_or_build_graph()
+        if st.button("🔍 Buscar Rutas Precisas", type="primary", use_container_width=True):
+            with st.spinner("🗺️ Cargando red vial detallada de Barcelona..."):
+                G, edge_geometries, g_msg = load_or_build_graph()
                 if g_msg:
                     st.error(g_msg)
-                elif G:
-                    with st.spinner("🧮 Calculando rutas alternativas con tráfico actual..."):
+                elif G and edge_geometries:
+                    with st.spinner("🧮 Calculando rutas con geometría real..."):
                         routes, error = calculate_alternative_routes(
-                            G,
+                            G, edge_geometries,
                             st.session_state.predictions_data,
                             model_data.get('cluster_geometries', {}),
                             st.session_state.route_origin,
@@ -1620,10 +1871,14 @@ def main():
                         elif routes:
                             st.session_state.route_alternatives = routes
                             st.session_state.selected_route = None
+                            
+                            # Información sobre la precisión del routing
+                            st.success("✅ Rutas calculadas con geometría real de carreteras")
+                            st.info("🛣️ Las rutas siguen exactamente el trazado de las carreteras de Barcelona")
         
         # Mostrar alternativas si existen
         if st.session_state.route_alternatives:
-            st.subheader("🔄 Comparación de Rutas")
+            st.subheader("🔄 Comparación de Rutas Precisas")
             
             tabs = st.tabs(list(st.session_state.route_alternatives.keys()))
             
@@ -1639,7 +1894,7 @@ def main():
                     
                     st.markdown(f"""
                     <div class='route-card'>
-                        <h3>{route_name}</h3>
+                        <h3>{route_name} - Geometría Real</h3>
                         <div style='display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-top: 15px;'>
                             <div style='text-align: center;'>
                                 <h4>📏 Distancia</h4>
@@ -1658,10 +1913,11 @@ def main():
                                 <p style='font-size: 18px; margin: 0;'>{safety_badge}</p>
                             </div>
                         </div>
+                        <p style='margin-top: 15px; font-size: 14px;'>🛣️ Ruta calculada con geometría real de carreteras</p>
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    # Mapa de la ruta
+                    # Mapa de la ruta con geometría real
                     route_map = create_enhanced_route_map(
                         st.session_state.predictions_data,
                         model_data.get('cluster_geometries', {}),
@@ -1671,21 +1927,6 @@ def main():
                         show_gradient=True
                     )
                     st_folium(route_map, height=400, key=f"map_{route_name}")
-                    
-                    # Advertencias de la ruta
-                    warnings = analyze_route_warnings(
-                        route_data,
-                        st.session_state.predictions_data,
-                        model_data.get('cluster_geometries', {})
-                    )
-                    
-                    if warnings:
-                        with st.expander("⚠️ Avisos de Seguridad"):
-                            for warning in warnings:
-                                if warning['type'] == 'high':
-                                    st.warning(f"**{warning['message']}**\n\n💡 {warning['suggestion']}")
-                                else:
-                                    st.info(f"{warning['message']}\n\n💡 {warning['suggestion']}")
                     
                     # Botón de selección
                     col_actions = st.columns(2)
@@ -1706,7 +1947,7 @@ def main():
             # Mostrar ruta seleccionada con más detalle
             if st.session_state.selected_route:
                 st.markdown("---")
-                st.subheader("📋 Ruta Seleccionada - Detalles")
+                st.subheader("📋 Ruta Seleccionada - Detalles Completos")
                 
                 selected = st.session_state.selected_route
                 col_details = st.columns(5)
@@ -1747,40 +1988,10 @@ def main():
                               timedelta(minutes=int(adjusted_time))).time()
                 st.info(f"🕐 **Salida:** {departure_time.strftime('%H:%M')} → **Llegada estimada:** {arrival_time.strftime('%H:%M')}")
                 
-                # Enlaces de navegación
-                st.subheader("🧭 Navegar con tu app favorita")
-                nav_cols = st.columns(3)
-                
-                with nav_cols[0]:
-                    google_url = generate_google_maps_url(
-                        st.session_state.route_origin,
-                        st.session_state.route_destination
-                    )
-                    st.markdown(f"""
-                    <a href="{google_url}" target="_blank" style="text-decoration: none;">
-                        <div style="background: #4285F4; color: white; padding: 10px; border-radius: 5px; text-align: center;">
-                            🗺️ Abrir en Google Maps
-                        </div>
-                    </a>
-                    """, unsafe_allow_html=True)
-                
-                with nav_cols[1]:
-                    waze_url = generate_waze_url(
-                        st.session_state.route_origin,
-                        st.session_state.route_destination
-                    )
-                    st.markdown(f"""
-                    <a href="{waze_url}" target="_blank" style="text-decoration: none;">
-                        <div style="background: #32CCFE; color: white; padding: 10px; border-radius: 5px; text-align: center;">
-                            🚗 Abrir en Waze
-                        </div>
-                    </a>
-                    """, unsafe_allow_html=True)
-                
-                with nav_cols[2]:
-                    # Copiar coordenadas
-                    coords_text = f"{st.session_state.route_origin[0]},{st.session_state.route_origin[1]} → {st.session_state.route_destination[0]},{st.session_state.route_destination[1]}"
-                    st.code(coords_text, language=None)
+                # Análisis de precisión de la ruta
+                if 'coords' in selected and len(selected['coords']) > len(selected.get('basic_coords', [])):
+                    improvement = len(selected['coords']) - len(selected.get('basic_coords', []))
+                    st.success(f"🎯 **Geometría mejorada:** +{improvement} puntos adicionales para mayor precisión en curvas")
     
     else:
         st.info("👆 Selecciona un origen y destino usando cualquiera de los métodos disponibles")
@@ -1788,6 +1999,7 @@ def main():
     # Tabs para análisis histórico
     st.header("📈 Análisis Histórico Completo")
     tab1, tab2, tab3, tab4 = st.tabs(["📊 Por Hora", "📅 Por Mes", "📈 Tendencia Anual", "🔥 Mapa de Calor"])
+    
     with tab1:
         hourly_chart = create_hourly_chart(historical_data)
         if hourly_chart:
@@ -1802,6 +2014,7 @@ def main():
                     st.subheader("🟢 Horas Más Seguras")
                     for hour, accidents in list(historical_data['safest_hours'].items())[:5]:
                         st.write(f"**{hour}:00** - {accidents:,} accidentes")
+    
     with tab2:
         monthly_chart = create_monthly_chart(historical_data)
         if monthly_chart:
@@ -1814,6 +2027,7 @@ def main():
                 with col2: st.metric("🌸 Primavera", f"{seasons.get('spring', 0):,}")
                 with col3: st.metric("☀️ Verano", f"{seasons.get('summer', 0):,}")
                 with col4: st.metric("🍂 Otoño", f"{seasons.get('autumn', 0):,}")
+    
     with tab3:
         yearly_chart = create_yearly_trend_chart(historical_data)
         if yearly_chart:
@@ -1825,6 +2039,7 @@ def main():
                 elif slope < 0: trend_text = f"📉 Tendencia decreciente: {slope:.1f} accidentes/año"
                 else: trend_text = "➡️ Tendencia estable"
                 st.markdown(f"**{trend_text}**")
+    
     with tab4:
         heatmap = create_heatmap_hour_dow(historical_data)
         if heatmap:
