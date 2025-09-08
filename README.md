@@ -1,119 +1,278 @@
-# Machine Learning Final Project
+# 🚗 Sistema de Predicción de Accidentes de Tráfico - Barcelona
 
-This is the final project of our Machine Learning bootcamp, where we demonstrate the skills and knowledge acquired throughout our studies. Throughout this bootcamp, we have studied different models based on projects of different areas and types. Now it's time to create our own project using the algorithm that we think is best suited to our problem.
+## 📱 Aplicación Web Desplegada
+**🌐 URL:** [https://accident-predictor-app-pablo-aznar.streamlit.app/](https://accident-predictor-app-pablo-aznar.streamlit.app/)
 
-We will have to find a suitable dataset to work with, process it, train a model and finally make it available for consumption.
+## 📊 Descripción General
 
-> *"Hard work always beats talent when talent doesn't work hard"* - Tim Notke
+Sistema inteligente de predicción de accidentes de tráfico para la ciudad de Barcelona que utiliza modelos de Machine Learning para analizar el riesgo de accidentes en tiempo real. La aplicación combina datos históricos de accidentes (2017-2024), condiciones meteorológicas en tiempo real, y análisis de tráfico para proporcionar predicciones precisas y recomendaciones de rutas seguras.
 
-## 👥  Credits
+## ✨ Características Principales
 
-**Team Members:**
-> - Member 1
-> - Member 2
-> - Member 3
+### 🔮 Predicción en Tiempo Real
+- **Análisis por zonas**: Predicción de riesgo para 101 clusters geográficos de Barcelona
+- **Factores múltiples**: Considera hora, día de la semana, festividades, temperatura, precipitación y viento
+- **Actualización dinámica**: Predicciones que se actualizan según la fecha y hora seleccionada
+- **Zonificación inteligente**: Mapeo visual de zonas de alto, medio y bajo riesgo
 
-**Academy:** 
-> - [4Geeks Academy](https://4geeksacademy.com/us/index) 
-> - **Bootcamp:** Spain-DS-17 
-> - **Mentor:** [Ing. Héctor Chocobar Torrejón](https://github.com/hchocobar/)
-> - **Teacher Assitant:** [Beatriz Solana Ros](https://github.com/mezcolantriz)
+### 🗺️ Planificador de Rutas Seguras
+- **Geometría real**: Rutas que siguen exactamente el trazado de las carreteras
+- **Múltiples algoritmos**: Ruta más segura, más rápida y equilibrada
+- **Condiciones de tráfico**: Integración de factores de tráfico por horario
+- **Tipos de vehículo**: Optimización específica para coches, motos, bicicletas y camiones
 
-## 🎯 Project Goal
+### 📈 Análisis Histórico Completo
+- **8 años de datos**: Análisis de 67,424 accidentes (2017-2024)
+- **Patrones temporales**: Distribución por hora, día, mes y año
+- **Mapa de calor**: Visualización hora vs día de la semana
+- **Tendencias**: Análisis de evolución temporal y estacionalidad
 
-The goal of this project is to develop a complete end-to-end Machine Learning solution that includes:
-- Data acquisition and processing
-- Exploratory Data Analysis (EDA)
-- Model development and optimization
-- Web application deployment
-- Real-world problem-solving through ML techniques
+### 🎯 Características Técnicas Avanzadas
+- **OSMnx Integration**: Red vial detallada de Barcelona sin simplificación
+- **Shapely Geometry**: Interpolación de coordenadas para curvas suaves
+- **Real-time Weather**: Datos meteorológicos de Open-Meteo API
+- **Geocoding**: Búsqueda inteligente de direcciones específicas de Barcelona
 
-## 🚀 Project Overview
+## 🛠️ Tecnologías Utilizadas
 
-*[This section will be updated as we define our specific project scope and objectives]*
+### Frontend y Visualización
+- **Streamlit**: Framework de aplicación web
+- **Folium**: Mapas interactivos con Leaflet
+- **Plotly**: Gráficos interactivos y dashboards
+- **CSS3**: Diseño profesional y responsivo
 
-### Problem Statement
-*To be defined - we will identify a real-world problem that can be solved using Machine Learning techniques*
+### Machine Learning y Datos
+- **Scikit-learn**: Modelos lightgbm de predicción y preprocesamiento
+- **Pandas**: Manipulación y análisis de datos
+- **NumPy**: Computación numérica optimizada
+- **Joblib**: Serialización de modelos entrenados
 
-### Dataset
-*To be defined - we will acquire a dataset that meets the following minimum requirements:*
-- 60,000+ instances (rows)
-- 20+ predictor variables (including at least 1 categorical variable)
+### Procesamiento Geoespacial
+- **OSMnx**: Descarga y análisis de redes de OpenStreetMap
+- **NetworkX**: Algoritmos de grafos para routing
+- **Shapely**: Operaciones geométricas avanzadas
+- **Geopy**: Geocodificación y búsqueda de direcciones
 
-### Methodology
-*To be defined - we will document our chosen approach and algorithms*
+### APIs y Servicios Externos
+- **Open-Meteo API**: Datos meteorológicos en tiempo real
+- **OpenStreetMap**: Datos de red vial y geografía
+- **Nominatim**: Servicio de geocodificación
 
-### Results
-*To be updated with our findings and model performance*
-
-## 📝 Project Phases
-
-### Step 1: Problem Definition
-Start by defining a problem and turn it into a Machine Learning problem. This is the first step, since the data must meet a certain need and the Machine Learning process must aim at satisfying that need.
-
-The choice of the data set must satisfy minimum requirements in terms of number of rows and predictor variables. At a minimum, it must contain:
-- 60,000 instances (rows)
-- 20 predictor variables, of which there must be at least 1 categorical variable
-
-**NOTE:** Depending on the dataset and the case study to be explored, datasets that do not reach the established minimum may be evaluated and accepted.
-
-### Step 2: Acquiring and Loading the Data Set
-Since in the real world data does not usually arrive in a flat csv file, this data must be acquired by one of the following ways:
-- Extracting data from some web page or portal using web scraping techniques
-- Exploitation of a public database using SQL language (the database must support this language)
-- Exploitation of a public API to obtain data
-
-Once you have the data, you must store it in a CSV document and load it into Python using Pandas.
-
-**NOTE:** Depending on the dataset and the case study to be explored, datasets downloaded by other means could be evaluated and accepted.
-
-### Step 3: Store the Information
-A widely used practice is to store the data, especially if they are massive, in a database for quick access to them. From all the databases we have studied, choose the one most compatible with your data and store it there. Then, perform queries using Python (with pure SQL code or using the wrappers we have studied in the course) to use the different statements: SELECT, JOIN, INSERT.... These queries must provide a value to start the analysis on the data prior to the statistics and EDA.
-
-It is important to understand that in the real world we do not only have CSV as an ally to store data, since it is easier to lose a flat file like CSV than a database with its connections and data models inside. Security is also a critical and important factor for storing your data there, since a CSV does not provide any protection mechanism that other technologies do.
-
-### Step 4: Perform a Descriptive Analysis
-The raw data stored in a database can be a great and very valuable source of information. Before we begin to simplify and exploit them with EDA, we must know their fundamental statistical measures: means, modes, distributions, deviations, etcetera. Analyze the descriptive statistical variables of each of the predictors of the data set and theorize about the distribution that each of them follows.
-
-Use hypothesis tests if you consider it necessary.
-
-### Step 5: Perform a Full EDA
-This step is vital to ensure that we keep the variables that are strictly necessary and eliminate those that are not relevant or do not provide information. Use the example Notebook we worked on and adapt it to this use case.
-
-Make sure to conveniently divide the data set into train and test as we have seen in previous lessons.
-
-### Step 6: Build the Model and Optimize It
-Once you have your data ready, decide which model fits best and train it. If in doubt, try using several of the ones you have already studied. Select the one that best fits the data.
-
-Remember that the hyperparameter optimization step is very important to explore and achieve the best version of the model.
-
-### Step 7: Deploy the Model
-Create a Machine Learning web application using your saved model. You can use Flask, Streamlit or any other tool you know. Use Heroku, Render or another cloud computing platform of your choice to deploy your web application and share it with the world. Remember that the application is going to be the gateway to potential users or customers, and you have to take care of even the smallest detail.
-
-## 📁 Project Structure
+## 📁 Estructura del Proyecto
 
 ```
-ml-project-repo/
-├── 📁 data/                # Raw and processed datasets
-│    ├── 📁 interin/        # For intermediate data that has been transformed.
-│    ├── 📁 processed/      # For the final data to be used for modeling.
-│    ├── 📁 raw/            # For raw data without any processing.
-├── 📁 database/            # SQL scripts and database configs
-├── 📁 docs/                # Documentation and presentation materials
-├── 📁 models/              # Trained model artifacts
-├── 📁 notebooks/           # Jupyter notebooks for EDA and analysis
-├── 📁 src/                 # Source code modules
-├── 📁 webapp/              # Flask/Streamlit application
+├── app.py                          # Aplicación principal Streamlit
+├── models/
+│   └── barcelona_accident_model_enhanced.joblib    # Modelo ML entrenado
+├── data/
+│   └── graph/
+│       ├── barcelona_drive_detailed.graphml        # Red vial detallada
+│       └── barcelona_geometry.json                 # Geometría de carreteras
+├── webapp/
+│   └── app_final.py
+├── requirements.txt                # Dependencias Python
+├── favorite_routes.json           # Rutas favoritas (generado automáticamente)
+└── README.md                      # Documentación
 ```
 
-## 🛠️ Technologies Used
+## 🚀 Instalación y Uso Local
 
-*[To be updated as we select our tech stack]*
+### Prerequisitos
+- Python 3.8+
+- pip (gestor de paquetes)
 
-## 📊 Results
+### Instalación
+```bash
+# Clonar el repositorio
+git clone <repository-url>
+cd accident-predictor-barcelona
 
-*[To be updated with our model performance and insights]*
+# Instalar dependencias
+pip install -r requirements.txt
 
-## 🌐 Live Demo
+# Ejecutar la aplicación
+streamlit run app.py
+```
 
-*[Link to be added when the web application is deployed]*
+### Dependencias Principales
+```
+streamlit>=1.28.0
+pandas>=2.0.0
+numpy>=1.24.0
+joblib>=1.3.0
+folium>=0.14.0
+streamlit-folium>=0.15.0
+plotly>=5.17.0
+requests>=2.31.0
+osmnx>=1.6.0
+networkx>=3.1
+scipy>=1.11.0
+geopy>=2.4.0
+pytz
+shapely>=2.0.0
+lightgbm>=4.0.0
+```
+
+## 🔧 Procesos Principales
+
+### 1. Sistema de Predicción
+```python
+# Modelo de Machine Learning con múltiples factores
+- Features meteorológicas: temperatura, precipitación, viento
+- Features temporales: hora, día semana, festivos
+- Features cíclicas: transformaciones sin/cos para temporalidad
+- Features de cluster: histórico de accidentes por zona
+- Interacciones: hora punta + lluvia, fin de semana + noche
+```
+
+### 2. Procesamiento de Red Vial
+```python
+# Optimizaciones implementadas:
+- OSMnx sin simplificación (simplify=False)
+- Filtrado específico para vehículos motorizados
+- Extracción de geometría real de cada segmento
+- Interpolación de puntos en curvas largas
+- Respeto de direcciones de circulación
+```
+
+### 3. Algoritmo de Routing
+```python
+# Cálculo de rutas alternativas:
+- Más Segura: prioriza evitar zonas de alto riesgo
+- Más Rápida: optimiza tiempo considerando tráfico
+- Equilibrada: balance entre tiempo y seguridad
+```
+
+### 4. Integración de Tráfico
+```python
+# Factores de tráfico por horario:
+- Madrugada (0-5h): Factor 0.5-0.6
+- Hora punta mañana (7-9h): Factor 1.3-1.5  
+- Mediodía (12-15h): Factor 1.0-1.3
+- Hora punta tarde (17-19h): Factor 1.3-1.5
+- Noche (21-23h): Factor 0.6-0.9
+```
+
+## 📊 Datasets y Modelo
+
+### Datos de Entrenamiento
+- **Fuente**: Accidentes de tráfico Barcelona (Open Data BCN)
+- **Período**: 2017-2024
+- **Volumen**: 67,424 registros de accidentes
+- **Clustering**: 101 zonas geográficas optimizadas
+
+### Características del Modelo
+- **Algoritmo**: lightgbm
+- **Métricas**: Precisión, Recall, F1-Score optimizados
+- **Validación**: Cross-validation temporal
+- **Threshold**: Optimizado para maximizar Recall e intentar minimizar falsos negativos
+
+### Variables Predictoras
+1. **Temporales**: hora, día_semana, mes, año, festivo
+2. **Meteorológicas**: temperatura, precipitación, velocidad_viento
+3. **Geográficas**: cluster_id, densidad_histórica
+4. **Contextuales**: fin_semana, hora_punta, condiciones_especiales
+
+## 🎨 Diseño y UX
+
+### Interfaz Profesional
+- **Paleta de colores**: Azul corporativo con acentos verdes/naranjas
+- **Componentes**: Cards con sombras sutiles y efectos hover
+- **Responsive**: Adaptable a diferentes tamaños de pantalla
+- **Accesibilidad**: Contraste optimizado y navegación clara
+
+### Experiencia de Usuario
+- **Flujo intuitivo**: Selección de parámetros → Predicción → Routing
+- **Feedback visual**: Indicadores de carga y confirmaciones
+- **Múltiples métodos**: Lugares populares, búsqueda, clic en mapa
+- **Persistencia**: Rutas favoritas guardadas localmente
+
+## 🏗️ Optimizaciones Implementadas
+
+### Rendimiento
+- **Caching inteligente**: `@st.cache_data` para operaciones costosas
+- **Grafo persistente**: Descarga única de red vial con almacenamiento local
+- **Predicción vectorizada**: Cálculo en lote para múltiples clusters
+- **Geometría optimizada**: Balance entre precisión y velocidad
+
+### Precisión de Rutas
+- **Sin simplificación**: Mantiene todos los nodos intermedios de OSM
+- **Geometría real**: Extracción de coordenadas reales de carreteras
+- **Interpolación**: Puntos adicionales en curvas para visualización suave
+- **Filtrado de carreteras**: Solo vías transitables por vehículos
+
+### Factores Urbanos Realistas
+- **Velocidades ajustadas**: Reducción por condiciones urbanas de Barcelona
+- **Demoras contextuales**: +120% tiempo base por semáforos y cruces
+- **Tipos de vía**: Diferenciación entre autopistas, avenidas y calles
+- **Tráfico horario**: Multiplicadores específicos por franja temporal
+
+## 📱 Funcionalidades de la Web App
+
+### Panel de Control
+- **Selector de fecha/hora**: Predicción hasta 30 días
+- **Zona horaria local**: Automática para Barcelona (CET/CEST)
+- **Meteorología en tiempo real**: Integración con Open-Meteo
+- **Estadísticas históricas**: Métricas clave y tendencias
+
+### Mapas Interactivos
+- **Zonas de riesgo**: Círculos coloreados por probabilidad
+- **Rutas detalladas**: Trazado que sigue carreteras reales
+- **Marcadores informativos**: Origen, destino y puntos de interés
+- **Gradiente de riesgo**: Colores de ruta según peligrosidad
+
+### Planificador de Rutas
+- **Múltiples métodos**: Lugares populares, búsqueda, selección manual
+- **Configuración avanzada**: Tipo de vehículo y condiciones de tráfico
+- **Comparación de alternativas**: 3 rutas con métricas detalladas
+- **Rutas favoritas**: Guardar y cargar rutas frecuentes
+
+## 🔒 Consideraciones de Seguridad
+
+### Datos y Privacidad
+- **Sin almacenamiento personal**: No se guardan datos del usuario
+- **Rutas locales**: Favoritas almacenadas solo en el navegador
+- **APIs públicas**: Solo uso de servicios de datos abiertos
+- **Geocodificación anónima**: Sin tracking de ubicaciones
+
+### Limitaciones y Disclaimers
+- **Uso informativo**: Las predicciones son orientativas, no definitivas
+- **Responsabilidad del conductor**: El usuario debe respetar señalización
+- **Datos en tiempo real**: Sujetos a disponibilidad de APIs externas
+- **Cobertura geográfica**: Específico para Barcelona ciudad
+
+## 👥 Contribución y Desarrollo
+
+### Estructura de Contribución
+1. **Fork** del repositorio
+2. **Branch** para nueva característica
+3. **Desarrollo** con tests locales
+4. **Pull Request** con descripción detallada
+
+### Roadmap Futuro
+- [ ] Integración con APIs de tráfico en tiempo real (TomTom/Google)
+- [ ] Expansión a otras ciudades españolas
+- [ ] Modelo de deep learning con datos temporales
+- [ ] App móvil nativa con notificaciones
+- [ ] Integración con sistemas de navegación
+
+## 📞 Contacto y Soporte
+
+- **Aplicación Web**: [https://accident-predictor-app-pablo-aznar.streamlit.app/](https://accident-predictor-app-pablo-aznar.streamlit.app/)
+- **Autor**: Pablo Aznar
+- **Tecnología**: Streamlit Cloud Deployment
+
+---
+
+### 📄 Licencia
+Este proyecto está desarrollado para fines educativos y de investigación. Los datos utilizados provienen de fuentes públicas (Open Data BCN, OpenStreetMap, Open-Meteo).
+
+### 🙏 Agradecimientos
+- **Ajuntament de Barcelona**: Por los datos abiertos de accidentes
+- **OpenStreetMap**: Por la cartografía colaborativa
+- **Open-Meteo**: Por los datos meteorológicos gratuitos
+- **Streamlit**: Por la plataforma de deployment
+
+---
+
+*Aplicación desarrollada con el objetivo de mejorar la seguridad vial en Barcelona mediante tecnología predictiva avanzada.*
