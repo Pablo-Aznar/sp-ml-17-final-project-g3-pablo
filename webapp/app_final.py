@@ -606,18 +606,17 @@ def get_traffic_conditions(lat1, lon1, lat2, lon2, current_hour=None):
     if current_hour is None:
         current_hour = get_barcelona_time().hour
     
-    # Factor de tráfico según hora del día
     traffic_factors = {
-        # Madrugada: tráfico muy ligero
-        0: 0.5, 1: 0.5, 2: 0.5, 3: 0.5, 4: 0.5, 5: 0.6,
-        # Mañana: hora punta
-        6: 0.8, 7: 1.3, 8: 1.5, 9: 1.4, 10: 1.1, 11: 0.9,
-        # Mediodía
-        12: 1.0, 13: 1.2, 14: 1.3, 15: 1.0,
-        # Tarde: hora punta
-        16: 1.1, 17: 1.3, 18: 1.5, 19: 1.4, 20: 1.2,
-        # Noche
-        21: 0.9, 22: 0.7, 23: 0.6
+    # Madrugada: tráfico muy ligero
+    0: 0.9, 1: 0.9, 2: 0.9, 3: 0.9, 4: 0.9, 5: 0.9,
+    # Mañana: hora punta
+    6: 0.95, 7: 1.2, 8: 1.4, 9: 1.4, 10: 1.1, 11: 1.1,
+    # Mediodía
+    12: 1.1, 13: 1.2, 14: 1.3, 15: 1.3,
+    # Tarde: hora punta
+    16: 1.2, 17: 1.3, 18: 1.4, 19: 1.4, 20: 1.2,
+    # Noche
+    21: 0.95, 22: 0.95, 23: 0.95
     }
     
     base_factor = traffic_factors.get(current_hour, 1.0)
@@ -627,7 +626,7 @@ def get_traffic_conditions(lat1, lon1, lat2, lon2, current_hour=None):
     traffic_multiplier = base_factor * random_factor
     
     # Determinar nivel de tráfico
-    if traffic_multiplier < 0.7:
+    if traffic_multiplier < 0.8:
         traffic_level = "🟢 Tráfico ligero"
         color = "green"
     elif traffic_multiplier < 1.2:
@@ -1023,10 +1022,10 @@ DEFAULT_SPEEDS = {
 }
 
 VEHICLE_SPEED_FACTORS = {
-    "🚗 Coche": 0.75,  # Mucho más lento en ciudad por tráfico real
-    "🏍️ Moto": 0.8,  # Algo más rápido que coches en tráfico
-    "🚲 Bicicleta": 0.7,  # parecido al camion
-    "🚚 Camión": 0.75,  # Más lento que coches
+    "🚗 Coche": 0.70,  # Mucho más lento en ciudad por tráfico real
+    "🏍️ Moto": 0.75,  # Algo más rápido que coches en tráfico
+    "🚲 Bicicleta": 0.65,  # parecido al camion
+    "🚚 Camión": 0.65,  # Más lento que coches
 }
 
 VEHICLE_RISK_FACTORS = {
