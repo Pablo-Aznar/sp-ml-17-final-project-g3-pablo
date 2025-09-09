@@ -1023,10 +1023,10 @@ DEFAULT_SPEEDS = {
 }
 
 VEHICLE_SPEED_FACTORS = {
-    "🚗 Coche": 0.8,  # Mucho más lento en ciudad por tráfico real
-    "🏍️ Moto": 0.85,  # Algo más rápido que coches en tráfico
-    "🚲 Bicicleta": 0.65,  # parecido al camion
-    "🚚 Camión": 0.7,  # Más lento que coches
+    "🚗 Coche": 0.75,  # Mucho más lento en ciudad por tráfico real
+    "🏍️ Moto": 0.8,  # Algo más rápido que coches en tráfico
+    "🚲 Bicicleta": 0.7,  # parecido al camion
+    "🚚 Camión": 0.75,  # Más lento que coches
 }
 
 VEHICLE_RISK_FACTORS = {
@@ -2257,3 +2257,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# streamlit run webapp/app_final.py
