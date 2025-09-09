@@ -3,22 +3,9 @@
 ## 📱 Aplicación Web Desplegada
 **🌐 URL:** [https://accident-predictor-app-pablo-aznar.streamlit.app/](https://accident-predictor-app-pablo-aznar.streamlit.app/)
 
-## 👥  Credits
-
-**Team Members:**
-> - Pablo Aznar Aniorte
-> - Simon Pin Toro
-> - Emiliano Salguero
-
-**Academy:** 
-> - [4Geeks Academy](https://4geeksacademy.com/us/index) 
-> - **Bootcamp:** Spain-DS-17 
-> - **Mentor:** [Ing. Héctor Chocobar Torrejón](https://github.com/hchocobar/)
-> - **Teacher Assitant:** [Beatriz Solana Ros](https://github.com/mezcolantriz)
 
 ## 📊 Descripción General
 
-Sistema inteligente de predicción de accidentes de tráfico para la ciudad de Barcelona que utiliza modelos de Machine Learning para analizar el riesgo de accidentes en tiempo real. La aplicación combina datos históricos de accidentes (2017-2024), condiciones meteorológicas en tiempo real, y análisis de tráfico para proporcionar predicciones precisas y recomendaciones de rutas seguras.
 
 ## ✨ Características Principales
 
@@ -71,60 +58,10 @@ Sistema inteligente de predicción de accidentes de tráfico para la ciudad de B
 - **OpenStreetMap**: Datos de red vial y geografía
 - **Nominatim**: Servicio de geocodificación
 
-## 📁 Estructura del Proyecto
 
-```
 
-├── models/
-│   └── barcelona_accident_model_enhanced.joblib    # Modelo ML entrenado
-├── data/
-│   └── graph/
-│       ├── barcelona_drive_detailed.graphml        # Red vial detallada
-│       └── barcelona_geometry.json                 # Geometría de carreteras
-├── webapp/
-│   └── app_final.py               # Aplicación principal Streamlit
-├── requirements.txt               # Dependencias Python
-├── favorite_routes.json           # Rutas favoritas (generado automáticamente)
-└── README.md                      # Documentación
-```
 
-## 🚀 Instalación y Uso Local
 
-### Prerequisitos
-- Python 3.8+
-- pip (gestor de paquetes)
-
-### Instalación
-```bash
-# Clonar el repositorio
-git clone <repository-url>
-cd accident-predictor-barcelona
-
-# Instalar dependencias
-pip install -r requirements.txt
-
-# Ejecutar la aplicación
-streamlit run app.py
-```
-
-### Dependencias Principales
-```
-streamlit>=1.28.0
-pandas>=2.0.0
-numpy>=1.24.0
-joblib>=1.3.0
-folium>=0.14.0
-streamlit-folium>=0.15.0
-plotly>=5.17.0
-requests>=2.31.0
-osmnx>=1.6.0
-networkx>=3.1
-scipy>=1.11.0
-geopy>=2.4.0
-pytz
-shapely>=2.0.0
-lightgbm>=4.0.0
-```
 
 ## 🔧 Procesos Principales
 
@@ -166,27 +103,7 @@ lightgbm>=4.0.0
 - Noche (21-23h): Factor 0.6-0.9
 ```
 
-## 📊 Datasets y Modelo
 
-### Datos de Entrenamiento
-- **Fuente**: Accidentes de tráfico Barcelona (Open Data BCN)
-- **Período**: 2017-2024
-- **Volumen**: 67,424 registros de accidentes
-- **Clustering**: 101 zonas geográficas optimizadas
-
-### Características del Modelo
-- **Algoritmo**: lightgbm
-- **Métricas**: Precisión, Recall, F1-Score optimizados
-- **Validación**: Cross-validation temporal
-- **Threshold**: Optimizado para maximizar Recall e intentar minimizar falsos negativos
-
-### Variables Predictoras
-1. **Temporales**: hora, día_semana, mes, año, festivo
-2. **Meteorológicas**: temperatura, precipitación, velocidad_viento
-3. **Geográficas**: cluster_id, densidad_histórica
-4. **Contextuales**: fin_semana, hora_punta, condiciones_especiales
-
-## 🎨 Diseño y UX
 
 ### Interfaz Profesional
 - **Paleta de colores**: Azul corporativo con acentos verdes/naranjas
@@ -238,29 +155,7 @@ lightgbm>=4.0.0
 - **Múltiples métodos**: Lugares populares, búsqueda, selección manual
 - **Configuración avanzada**: Tipo de vehículo y condiciones de tráfico
 - **Comparación de alternativas**: 3 rutas con métricas detalladas
-- **Rutas favoritas**: Guardar y cargar rutas frecuentes
 
-## 🔒 Consideraciones de Seguridad
-
-### Datos y Privacidad
-- **Sin almacenamiento personal**: No se guardan datos del usuario
-- **Rutas locales**: Favoritas almacenadas solo en el navegador
-- **APIs públicas**: Solo uso de servicios de datos abiertos
-- **Geocodificación anónima**: Sin tracking de ubicaciones
-
-### Limitaciones y Disclaimers
-- **Uso informativo**: Las predicciones son orientativas, no definitivas
-- **Responsabilidad del conductor**: El usuario debe respetar señalización
-- **Datos en tiempo real**: Sujetos a disponibilidad de APIs externas
-- **Cobertura geográfica**: Específico para Barcelona ciudad
-
-## 👥 Contribución y Desarrollo
-
-### Estructura de Contribución
-1. **Fork** del repositorio
-2. **Branch** para nueva característica
-3. **Desarrollo** con tests locales
-4. **Pull Request** con descripción detallada
 
 ### Roadmap Futuro
 - [ ] Integración con APIs de tráfico en tiempo real (TomTom/Google)
@@ -269,23 +164,7 @@ lightgbm>=4.0.0
 - [ ] App móvil nativa con notificaciones
 - [ ] Integración con sistemas de navegación
 
-## 📞 Contacto y Soporte
 
 - **Aplicación Web**: [https://accident-predictor-app-pablo-aznar.streamlit.app/](https://accident-predictor-app-pablo-aznar.streamlit.app/)
-- **Autor**: Pablo Aznar
-- **Tecnología**: Streamlit Cloud Deployment
 
----
 
-### 📄 Licencia
-Este proyecto está desarrollado para fines educativos y de investigación. Los datos utilizados provienen de fuentes públicas (Open Data BCN, OpenStreetMap, Open-Meteo).
-
-### 🙏 Agradecimientos
-- **Ajuntament de Barcelona**: Por los datos abiertos de accidentes
-- **OpenStreetMap**: Por la cartografía colaborativa
-- **Open-Meteo**: Por los datos meteorológicos gratuitos
-- **Streamlit**: Por la plataforma de deployment
-
----
-
-*Aplicación desarrollada con el objetivo de mejorar la seguridad vial en Barcelona mediante tecnología predictiva avanzada.*
