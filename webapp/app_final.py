@@ -1023,10 +1023,10 @@ DEFAULT_SPEEDS = {
 }
 
 VEHICLE_SPEED_FACTORS = {
-    "🚗 Coche": 0.3,  # Mucho más lento en ciudad por tráfico real
-    "🏍️ Moto": 0.4,  # Algo más rápido que coches en tráfico
-    "🚲 Bicicleta": 0.08,  # Mucho más lento
-    "🚚 Camión": 0.25,  # Más lento que coches
+    "🚗 Coche": 0.8,  # Mucho más lento en ciudad por tráfico real
+    "🏍️ Moto": 0.85,  # Algo más rápido que coches en tráfico
+    "🚲 Bicicleta": 0.65,  # parecido al camion
+    "🚚 Camión": 0.7,  # Más lento que coches
 }
 
 VEHICLE_RISK_FACTORS = {
